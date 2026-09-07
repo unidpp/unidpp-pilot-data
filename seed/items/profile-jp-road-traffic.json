@@ -1,0 +1,37 @@
+{
+ "class": "profile",
+ "definition": "JP road-traffic profile for an EPAC e-bike: type facts, assistance cutoff 25 km/h per road-traffic law",
+ "effective_from": "2027-04-01T00:00:00Z",
+ "item_id": "urn:unidpp:profile:jp-road-traffic",
+ "manifest": {
+  "axes": [
+   "jurisdiction"
+  ],
+  "custody": {
+   "default_model": "identity_preserved",
+   "standard": "ISO 22095:2020"
+  },
+  "data_points": [],
+  "issuing_role": "manufacturer",
+  "legal_basis": [
+   {
+    "citation": "type designation",
+    "force": "binding",
+    "instrument": "JP road traffic law (EPAC provisions)"
+   }
+  ],
+  "transforms": [],
+  "triggers": [
+   {
+    "description": "type passport issued for JP placement",
+    "evaluation_mode": "on_issuance",
+    "predicate_class": "fact_predicate",
+    "predicate_ref": "pred/placed-on-jp-market"
+   }
+  ],
+  "version": "1.0.0"
+ },
+ "register_id": "unidpp-dev",
+ "submitting_organization": "UniDPP pilot",
+ "version": "1.0.0"
+}

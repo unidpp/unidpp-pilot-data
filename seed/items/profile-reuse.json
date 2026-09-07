@@ -1,0 +1,79 @@
+{
+ "class": "profile",
+ "definition": "Reuse and preparing-for-reuse profile: requirements for objects re-entering use for the same purpose (waste-hierarchy-preferred routes), per the Waste Framework Directive",
+ "effective_from": "2026-10-01T00:00:00Z",
+ "item_id": "urn:unidpp:profile:reuse",
+ "manifest": {
+  "axes": [
+   "characteristic"
+  ],
+  "custody": {
+   "default_model": "identity_preserved",
+   "standard": "ISO 22095:2020"
+  },
+  "data_points": [
+   {
+    "cardinality": "1",
+    "element": "de/m/condition-grade",
+    "min_capability": "S0",
+    "required_provenance": "attested",
+    "subject_granularity": "instance",
+    "tier_a": false,
+    "traversal_depth": 1,
+    "trust_floor": "attested"
+   },
+   {
+    "cardinality": "1..n",
+    "element": "de/m/functional-test",
+    "min_capability": "S0",
+    "required_provenance": "attested",
+    "subject_granularity": "instance",
+    "tier_a": false,
+    "traversal_depth": 1,
+    "trust_floor": "attested"
+   },
+   {
+    "cardinality": "0..1",
+    "element": "de/m/cert-ref",
+    "min_capability": "S0",
+    "required_provenance": "attested",
+    "subject_granularity": "instance",
+    "tier_a": false,
+    "traversal_depth": 1,
+    "trust_floor": "attested"
+   }
+  ],
+  "issuing_role": "refurbisher / dealer (EN 18239 role set); condition attestations by qualified attestor as lens-scoped stamps",
+  "legal_basis": [
+   {
+    "citation": "Art. 4 (waste hierarchy \u2014 preparing for reuse ranked second only to prevention); Art. 3(13) re-use; Art. 3(16) preparing for re-use",
+    "force": "binding",
+    "instrument": "Directive 2008/98/EC on waste (WFD)"
+   },
+   {
+    "citation": "repair and refurbished-goods provisions",
+    "force": "binding",
+    "instrument": "Directive (EU) 2024/1799 on common rules promoting the repair of goods"
+   },
+   {
+    "citation": "refurbisher role (clause 6.2 role set)",
+    "force": "harmonized",
+    "instrument": "EN 18239 (data carriers and access control for DPP)"
+   }
+  ],
+  "notes": "Reuse is the loop's cheapest closure and the identity-conserving one: the object keeps its passport (I1); events append (E7 refurbish, E1 custody transfer, E14 condition stamps). Closed installation intervals carry harvested-part provenance, which is the value carrier of the re-use market. Preparing-for-reuse on a subject already in waste status runs through P4's re-qualification machinery where the law requires it; the two profiles compose on the same identity.",
+  "transforms": [],
+  "triggers": [
+   {
+    "description": "refurbish / preparing-for-re-use operation on the subject (E7 event class), or custody transfer to a re-use channel with a condition stamp",
+    "evaluation_mode": "on_event",
+    "predicate_class": "fact_predicate",
+    "predicate_ref": "pred/reuse-operation"
+   }
+  ],
+  "version": "1.0.0"
+ },
+ "register_id": "unidpp-dev",
+ "submitting_organization": "ISO/TC 154 + OIML (JTC 5 liaison delegation)",
+ "version": "1.0.0"
+}

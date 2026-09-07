@@ -1,0 +1,16 @@
+{
+ "class": "transform",
+ "definition": "Equivalence claim: GB 4943.1-2022 corresponds to IEC 62368-1 for the purposes of charger conformity evidence",
+ "effective_from": "2026-09-01T00:00:00Z",
+ "item_id": "urn:unidpp:equiv:gb4943-iec62368",
+ "manifest": {
+  "attester": "CQC-pattern notified body",
+  "source": "GB 4943.1-2022",
+  "target": "IEC 62368-1",
+  "transform_class": "localization_mapping",
+  "version": "1.0.0"
+ },
+ "register_id": "unidpp-dev",
+ "submitting_organization": "UniDPP pilot",
+ "version": "1.0.0"
+}

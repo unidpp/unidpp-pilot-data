@@ -1,0 +1,63 @@
+{
+ "register_id": "unidpp-dev",
+ "item_id": "urn:unidpp:profile:pilot-eu-lens",
+ "class": "profile",
+ "definition": "Pilot EU lens on the E8 demo passport: operator identity, reparability score and carbon footprint of the neutral core, classified on the EU reparability bands (projector-shaped manifest; the jurisdiction-level duty lives in urn:unidpp:profile:eu-machinery-battery)",
+ "version": "1.0.0",
+ "effective_from": "2026-07-01T00:00:00Z",
+ "manifest": {
+  "version": "1.0.0",
+  "profile": {
+   "id": "urn:unidpp:profile:pilot-eu-lens",
+   "axes": { "jurisdiction": "EU", "sector": "e-mobility" },
+   "trigger": "Any",
+   "min_capability": "silent",
+   "freshness": "Static",
+   "effective": { "from": "2026-07-01T00:00:00Z" },
+   "data_points": [
+    { "register": "unidpp-dev", "item": "de.dpp.operator-id", "version": "1.0.0" },
+    { "register": "unidpp-dev", "item": "de.dpp.reparability-score", "version": "1.1.0" },
+    { "register": "unidpp-dev", "item": "de.dpp.carbon-footprint", "version": "1.2.0" }
+   ],
+   "crypto_suites": ["ecdsa-p256"],
+   "confidential": false,
+   "resolution": "public",
+   "edge_visibility": "blind",
+   "traversal": "role-scoped"
+  },
+  "bindings": [
+   {
+    "element": "unidpp-dev/de.dpp.operator-id@1.0.0",
+    "source": "de.dpp.operator-id",
+    "min_trust": "attested",
+    "min_capability": "silent"
+   },
+   {
+    "element": "unidpp-dev/de.dpp.reparability-score@1.1.0",
+    "source": "de.dpp.reparability-score",
+    "min_trust": "self-declared",
+    "min_capability": "silent"
+   },
+   {
+    "element": "unidpp-dev/de.dpp.carbon-footprint@1.2.0",
+    "source": "de.dpp.carbon-footprint",
+    "min_trust": "self-declared",
+    "min_capability": "silent",
+    "declared_unit": "kgCO2e"
+   }
+  ],
+  "transforms": [
+   {
+    "kind": "classification",
+    "id": "eu-reparability-class",
+    "source": "de.dpp.reparability-score",
+    "bands": [
+     { "label": "A", "min": "8.0" },
+     { "label": "B", "min": "6.0" },
+     { "label": "C", "min": "4.0" },
+     { "label": "D", "min": "0" }
+    ]
+   }
+  ]
+ }
+}

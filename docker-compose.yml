@@ -1,0 +1,183 @@
+# docker-compose.yml — the full pilot stack, sketched for containers.
+#
+# TODO.impl item C8 (pilot-orchestration). DOCUMENTED BUT NOT THE
+# PRIMARY PATH: ./stack.sh is — it builds the sibling repos once
+# (cargo build --release) and runs the same binaries on
+# 127.0.0.1:8390-8397 with the same env wiring as below. Use this
+# file when you want the stack containerized (CI, a demo host, an
+# arm64/mac that does not build Rust locally).
+#
+# The sibling repos do not ship Dockerfiles yet, so every service
+# runs `cargo build --release && cargo run --release` inside a
+# rust:1.83-slim container over a bind mount of its own repo
+# (the pattern proven in unidpp-e2e/docker-compose.yml). First boot
+# compiles; a named cargo cache volume makes subsequent boots fast.
+# When a repo ships its own Dockerfile, replace the image/command
+# pair with `build: ../<repo>`.
+#
+# Usage:
+#   docker compose up -d          # the whole stack (builds on first run)
+#   docker compose ps             # health via the healthchecks below
+#   docker compose logs -f registry
+#
+# After the stack is healthy, seed + produce the demo artifacts from
+# the HOST (seed-pilot.sh speaks HTTP, it does not care where the
+# services run):
+#   ./seed-pilot.sh
+#
+# Notes:
+# - Ports match stack.sh exactly (8390 registry ... 8396 archive;
+#   8397 reserved).
+# - ./run journals and ./passports store are bind-mounted so seed
+#   data and demo passports survive container restarts. The registry
+#   journal (./registry-journal.jsonl) is bind-mounted read-write:
+#   it is the seed of record and is NEVER wiped by compose
+#   (docker compose down without -v keeps volumes; do not use -v).
+# - Everything runs in dev mode (no admin tokens, seeded-dev
+#   keyrings) — a demonstration pilot, not a production deployment.
+
+x-rust-service: &rust-service
+  image: rust:1.83-slim
+  restart: unless-stopped
+  command: ["bash", "-lc", "cargo build --release && exec ./target/release/$(basename $PWD)"]
+
+services:
+  registry:
+    <<: *rust-service
+    working_dir: /src/unidpp-registry
+    volumes:
+      - ../unidpp-registry:/src/unidpp-registry
+      - registry-target:/src/unidpp-registry/target
+      - ./registry-journal.jsonl:/state/registry-journal.jsonl
+    environment:
+      - UNIDPP_REGISTRY_BIND=0.0.0.0:8390
+      - UNIDPP_REGISTRY_STATE_FILE=/state/registry-journal.jsonl
+    ports:
+      - "8390:8390"
+    healthcheck: &hc
+      test: ["CMD-SHELL", "curl -sf http://localhost:8390/healthz || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 60
+
+  trust:
+    <<: *rust-service
+    working_dir: /src/unidpp-trust
+    volumes:
+      - ../unidpp-trust:/src/unidpp-trust
+      - trust-target:/src/unidpp-trust/target
+      - ./run/trust-journal.jsonl:/state/trust-journal.jsonl
+    environment:
+      - UNIDPP_TRUST_BIND=0.0.0.0:8391
+      - UNIDPP_TRUST_STATE_FILE=/state/trust-journal.jsonl
+    ports:
+      - "8391:8391"
+    healthcheck:
+      <<: *hc
+      test: ["CMD-SHELL", "curl -sf http://localhost:8391/healthz || exit 1"]
+
+  log:
+    <<: *rust-service
+    working_dir: /src/unidpp-log
+    volumes:
+      - ../unidpp-log:/src/unidpp-log
+      - log-target:/src/unidpp-log/target
+      - ./run/log-journal.jsonl:/state/log-journal.jsonl
+    environment:
+      - UNIDPP_LOG_BIND=0.0.0.0:8392
+      - UNIDPP_LOG_ID=unidpp-pilot-log-1
+      - UNIDPP_LOG_STATE_FILE=/state/log-journal.jsonl
+    ports:
+      - "8392:8392"
+    healthcheck:
+      <<: *hc
+      test: ["CMD-SHELL", "curl -sf http://localhost:8392/healthz || exit 1"]
+
+  issuer:
+    <<: *rust-service
+    working_dir: /src/unidpp-issuer
+    volumes:
+      - ../unidpp-issuer:/src/unidpp-issuer
+      - issuer-target:/src/unidpp-issuer/target
+      - ./run/issuer-journal.jsonl:/state/issuer-journal.jsonl
+    environment:
+      - UNIDPP_ISSUER_BIND=0.0.0.0:8393
+      - UNIDPP_ISSUER_STATE_FILE=/state/issuer-journal.jsonl
+      - UNIDPP_ISSUER_REGISTRY_URL=http://registry:8390
+    ports:
+      - "8393:8393"
+    depends_on:
+      registry:
+        condition: service_healthy
+    healthcheck:
+      <<: *hc
+      test: ["CMD-SHELL", "curl -sf http://localhost:8393/healthz || exit 1"]
+
+  projector:
+    <<: *rust-service
+    working_dir: /src/unidpp-projector
+    volumes:
+      - ../unidpp-projector:/src/unidpp-projector
+      - projector-target:/src/unidpp-projector/target
+      - ./passports:/state/passports
+    environment:
+      - UNIDPP_PROJECTOR_BIND=0.0.0.0:8394
+      - UNIDPP_REGISTRY_URL=http://registry:8390
+      - UNIDPP_PROJECTOR_PASSPORTS_DIR=/state/passports
+    ports:
+      - "8394:8394"
+    depends_on:
+      registry:
+        condition: service_healthy
+    healthcheck:
+      <<: *hc
+      test: ["CMD-SHELL", "curl -sf http://localhost:8394/healthz || exit 1"]
+
+  gateway:
+    <<: *rust-service
+    working_dir: /src/unidpp-gateway
+    volumes:
+      - ../unidpp-gateway:/src/unidpp-gateway
+      - gateway-target:/src/unidpp-gateway/target
+    environment:
+      - UNIDPP_GATEWAY_BIND=0.0.0.0:8395
+      - UNIDPP_ISSUER_URL=http://issuer:8393
+    ports:
+      - "8395:8395"
+    depends_on:
+      issuer:
+        condition: service_healthy
+    healthcheck:
+      <<: *hc
+      test: ["CMD-SHELL", "curl -sf http://localhost:8395/healthz || exit 1"]
+
+  archive:
+    <<: *rust-service
+    working_dir: /src/unidpp-archive
+    volumes:
+      - ../unidpp-archive:/src/unidpp-archive
+      - archive-target:/src/unidpp-archive/target
+      - ./run/archive-journal.jsonl:/state/archive-journal.jsonl
+      - ./run/archive-snapshots:/state/archive-snapshots
+    environment:
+      - UNIDPP_ARCHIVE_BIND=0.0.0.0:8396
+      - UNIDPP_ARCHIVE_STATE_FILE=/state/archive-journal.jsonl
+      - UNIDPP_ARCHIVE_SNAPSHOT_DIR=/state/archive-snapshots
+      - UNIDPP_LOG_URL=http://log:8392
+    ports:
+      - "8396:8396"
+    depends_on:
+      log:
+        condition: service_healthy
+    healthcheck:
+      <<: *hc
+      test: ["CMD-SHELL", "curl -sf http://localhost:8396/healthz || exit 1"]
+
+volumes:
+  registry-target:
+  trust-target:
+  log-target:
+  issuer-target:
+  projector-target:
+  gateway-target:
+  archive-target:
