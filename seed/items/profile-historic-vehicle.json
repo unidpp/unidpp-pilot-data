@@ -1,0 +1,20 @@
+{
+ "register_id": "unidpp",
+ "item_id": "urn:unidpp:profile:historic-vehicle",
+ "class": "profile",
+ "definition": "Historic vehicle profile (clock-fired): binds when the subject is at least forty years past manufacture",
+ "version": "1.0.0",
+ "manifest": {
+  "version": "1.0.0",
+  "axes": ["characteristic"],
+  "triggers": [
+   {
+    "predicate_class": "time",
+    "basis": "manufactured_at",
+    "operator": ">=",
+    "duration": "P40Y",
+    "description": "at least forty years since manufacture"
+   }
+  ]
+ }
+}

@@ -1,0 +1,6 @@
+{
+ "profile_id": "urn:unidpp:profile:historic-vehicle",
+ "product_type": "type:super-cub:1962",
+ "effective_from": "1990-01-01T00:00:00Z",
+ "retroactive": true
+}
