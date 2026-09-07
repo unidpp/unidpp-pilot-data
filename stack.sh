@@ -208,7 +208,8 @@ cmd_start() {
   start_service log unidpp-log 8392 60 \
     UNIDPP_LOG_BIND=127.0.0.1:8392 \
     UNIDPP_LOG_ID=unidpp-pilot-log-1 \
-    UNIDPP_LOG_STATE_FILE="$RUN_DIR/log-journal.jsonl"
+    UNIDPP_LOG_STATE_FILE="$RUN_DIR/log-journal.jsonl" \
+    UNIDPP_LOG_EXTERNAL_TSA_URL="${UNIDPP_LOG_EXTERNAL_TSA_URL:-http://timestamp.digicert.com}"
 
   start_service issuer unidpp-issuer 8393 60 \
     UNIDPP_ISSUER_BIND=127.0.0.1:8393 \
