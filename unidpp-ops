@@ -79,7 +79,8 @@ cmd_backup() {
   [ -f "$ROOT/registry-journal.jsonl" ] && files+=("registry-journal.jsonl")
   [ -f "$ROOT/jp-registry-journal.jsonl" ] && files+=("jp-registry-journal.jsonl")
   while IFS= read -r journal; do files+=("${journal#"$ROOT"/}"); done \
-    < <(find "$ROOT/run" "$ROOT/tenants" -name '*-journal.jsonl' 2>/dev/null)
+    < <(find "$ROOT/run" "$ROOT/tenants" \
+         \( -name '*-journal.jsonl' -o -name 'unidpp-operator.yaml' \) 2>/dev/null)
   while IFS= read -r seed; do files+=("${seed#"$ROOT"/}"); done \
     < <(find "$ROOT/seed" -type f 2>/dev/null)
   [ "${#files[@]}" -ge 1 ] || die "nothing to back up (no manifest?)"
@@ -728,6 +729,37 @@ PYIN
   echo "recover-drill: GREEN — report: backups/$label.json"
 }
 
+# ---------------------------------------------------------------------------
+# decommission — retire a tenant the doctrine-shaped way: prove its
+# state is preserved (a final verified data-only bundle), then move
+# it aside. Never delete — the same rule restore and recover follow.
+# ---------------------------------------------------------------------------
+cmd_decommission() {
+  local tenant="${1:?usage: decommission <tenant>}"
+  case "$tenant" in
+    *.retired.*) die "'$tenant' is already a retired (rename-aside) name" ;;
+  esac
+  [ -d "$ROOT/tenants/$tenant" ] \
+    || die "no tenant directory at tenants/$tenant"
+
+  # Stop its services if running (the tenant runner's own stop; a
+  # stopped tenant is not an error).
+  "$ROOT/tenants/up.sh" "$tenant" stop >/dev/null 2>&1 || true
+
+  # The preservation proof: a final data-only bundle, verified.
+  cmd_bundle "$tenant" --data-only >/dev/null
+  local bundle
+  bundle="$(printf '%s\n' "$BACKUPS_DIR"/"$tenant"-data-*.tar.gz | sort -r | head -1)"
+  [ -n "$bundle" ] || die "decommission: the final bundle was not produced"
+  verify_archive "$bundle" >/dev/null
+
+  local stamp="retired.$(date -u +%Y%m%dT%H%M%SZ)"
+  mv "$ROOT/tenants/$tenant" "$ROOT/tenants/$tenant.$stamp"
+  echo "decommission: tenants/$tenant -> tenants/$tenant.$stamp"
+  echo "  preserved: $bundle (verified)"
+  echo "  reversal:  mv tenants/$tenant.$stamp tenants/$tenant && ./tenants/up.sh $tenant start"
+}
+
 case "${1:-}" in
   backup)  shift; cmd_backup "${1:-}" ;;
   schedule) shift; cmd_schedule "${1:-}" ;;
@@ -736,6 +768,7 @@ case "${1:-}" in
   bundle)  shift; [ "${1:-}" ] || die "usage: bundle <tenant> [--data-only] [--out dir]"; cmd_bundle "$@" ;;
   rehearse-upgrade) shift; cmd_rehearse ;;
   recover) shift; [ "${1:-}" ] || die "usage: recover <archive> [--force]"; cmd_recover "$1" "${2:-}" ;;
+  decommission) shift; [ "${1:-}" ] || die "usage: decommission <tenant>"; cmd_decommission "$1" ;;
   restore) shift; [ "${1:-}" ] && [ "${2:-}" ] || die "usage: restore <archive> <name> [--force]"; cmd_restore "$1" "$2" "${3:-}" ;;
   verify)  shift; [ "${1:-}" ] || die "usage: verify <archive>"; cmd_verify "$1" ;;
   *) sed -n '2,34p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
