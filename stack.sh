@@ -79,8 +79,15 @@ healthz() { # healthz <port>
 # all answer "ok"), which matters on this shared box: the
 # unidpp-registry-kit launcher also defaults to 8391.
 service_id() { # service_id <port>
-  curl -sf -m 2 "http://127.0.0.1:$1/" 2>/dev/null \
-    | jq -r '.service // empty' 2>/dev/null
+  local id
+  id="$(curl -sf -m 2 "http://127.0.0.1:$1/" 2>/dev/null \
+    | jq -r '.service // empty' 2>/dev/null)"
+  # Services whose / is a human page (the console) identify at the
+  # well-known path instead.
+  [[ -z "$id" ]] \
+    && id="$(curl -sf -m 2 "http://127.0.0.1:$1/.well-known/unidpp-service" 2>/dev/null \
+        | jq -r '.service // empty' 2>/dev/null)"
+  printf '%s' "$id"
 }
 
 is_ours() { # is_ours <port> <expected-service-name>
@@ -192,6 +199,24 @@ ensure_jp_tunnel() {
   echo $! > "$pidfile"
 }
 
+ensure_console_tunnel() {
+  local pidfile="$RUN_DIR/console-tunnel.pid" logfile="$RUN_DIR/console-tunnel.log"
+  if [[ ! -s "$PILOT_DIR/console-tunnel.token" ]]; then
+    echo "==> no console-tunnel.token — the console stays loopback-only"
+    return 0
+  fi
+  command -v cloudflared >/dev/null 2>&1 \
+    || { echo "==> console-tunnel.token present but cloudflared is not installed — skipping"; return 0; }
+  if [[ -f "$pidfile" ]] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then
+    echo "==> console-tunnel: already running (pid $(cat "$pidfile"))"
+    return 0
+  fi
+  echo "==> starting cloudflared named tunnel (console.unidpp.org -> 8389)"
+  nohup cloudflared tunnel run --token "$(cat "$PILOT_DIR/console-tunnel.token")" \
+    --url http://127.0.0.1:8389 > "$logfile" 2>&1 &
+  echo $! > "$pidfile"
+}
+
 # ---------------------------------------------------------------------------
 cmd_start() {
   # Registry first: the issuer forwards to it, the projector reads
@@ -245,6 +270,7 @@ cmd_start() {
 
   ensure_tunnel
   ensure_jp_tunnel
+  ensure_console_tunnel
 
   echo
   echo "==> stack up: 8390 registry · 8391 trust · 8392 log · 8393 issuer"
@@ -255,7 +281,7 @@ cmd_start() {
 # ---------------------------------------------------------------------------
 cmd_stop() {
   local name pid
-  for name in console archive gateway projector issuer log trust registry jp-registry tunnel jp-tunnel; do
+  for name in console archive gateway projector issuer log trust registry jp-registry tunnel jp-tunnel console-tunnel; do
     local pidfile="$RUN_DIR/$name.pid"
     if [[ -f "$pidfile" ]]; then
       pid="$(cat "$pidfile")"
