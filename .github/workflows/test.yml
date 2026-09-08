@@ -83,7 +83,7 @@ jobs:
           for repo in unidpp-config unidpp-registry unidpp-trust unidpp-log \
                       unidpp-issuer unidpp-projector unidpp-gateway \
                       unidpp-archive unidpp-console; do
-            cargo build --release --manifest-path "$repo/Cargo.toml"
+            cargo build --release --manifest-path "../$repo/Cargo.toml"
           done
       - name: Start the stack
         run: |
