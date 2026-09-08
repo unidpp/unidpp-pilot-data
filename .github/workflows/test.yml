@@ -29,41 +29,53 @@ jobs:
         with:
           path: unidpp-pilot-data
       - uses: actions/checkout@v4
-        repository: unidpp/unidpp-core
-        path: unidpp-core
+        with:
+          repository: unidpp/unidpp-core
+          path: unidpp-core
       - uses: actions/checkout@v4
-        repository: unidpp/unidpp-signatif
-        path: unidpp-signatif
+        with:
+          repository: unidpp/unidpp-signatif
+          path: unidpp-signatif
       - uses: actions/checkout@v4
-        repository: unidpp/unidpp-cli
-        path: unidpp-cli
+        with:
+          repository: unidpp/unidpp-cli
+          path: unidpp-cli
       - uses: actions/checkout@v4
-        repository: unidpp/unidpp-config
-        path: unidpp-config
+        with:
+          repository: unidpp/unidpp-config
+          path: unidpp-config
       - uses: actions/checkout@v4
-        repository: unidpp/unidpp-registry
-        path: unidpp-registry
+        with:
+          repository: unidpp/unidpp-registry
+          path: unidpp-registry
       - uses: actions/checkout@v4
-        repository: unidpp/unidpp-issuer
-        path: unidpp-issuer
+        with:
+          repository: unidpp/unidpp-issuer
+          path: unidpp-issuer
       - uses: actions/checkout@v4
-        repository: unidpp/unidpp-trust
-        path: unidpp-trust
+        with:
+          repository: unidpp/unidpp-trust
+          path: unidpp-trust
       - uses: actions/checkout@v4
-        repository: unidpp/unidpp-log
-        path: unidpp-log
+        with:
+          repository: unidpp/unidpp-log
+          path: unidpp-log
       - uses: actions/checkout@v4
-        repository: unidpp/unidpp-projector
-        path: unidpp-projector
+        with:
+          repository: unidpp/unidpp-projector
+          path: unidpp-projector
       - uses: actions/checkout@v4
-        repository: unidpp/unidpp-gateway
-        path: unidpp-gateway
+        with:
+          repository: unidpp/unidpp-gateway
+          path: unidpp-gateway
       - uses: actions/checkout@v4
-        repository: unidpp/unidpp-archive
-        path: unidpp-archive
+        with:
+          repository: unidpp/unidpp-archive
+          path: unidpp-archive
       - uses: actions/checkout@v4
-        repository: unidpp/unidpp-console
-        path: unidpp-console
+        with:
+          repository: unidpp/unidpp-console
+          path: unidpp-console
       - uses: dtolnay/rust-toolchain@stable
       - name: Build the stack
         run: |
@@ -84,7 +96,7 @@ jobs:
         run: |
           set -eu
           ./unidpp-ops backup
-          archive="$(ls -1t backups/*.tar.gz | head -1)"
+          archive="$(printf '%s\n' backups/*.tar.gz | sort -r | head -1)"
           ./unidpp-ops verify "$archive"
           ./unidpp-ops restore "$archive" ci-restored
       - name: The drill
@@ -96,7 +108,7 @@ jobs:
           # acme-cn is the sovereign tenant; create it if the runner's
           # seed did not (it is committed, so it exists).
           ./unidpp-ops bundle acme-cn
-          bundle="$(ls -1t backups/acme-cn-bundle-*.tar.gz | head -1)"
+          bundle="$(printf '%s\n' backups/acme-cn-bundle-*.tar.gz | sort -r | head -1)"
           ./unidpp-ops verify "$bundle"
           tmp="$(mktemp -d)"
           tar -xzf "$bundle" -C "$tmp"
