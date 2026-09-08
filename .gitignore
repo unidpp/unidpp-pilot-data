@@ -1,5 +1,7 @@
-run/
+*.log
+*.tar.gz
+*.token
+backups/
 demo/
 passports/
-*.log
-*.token
+run/

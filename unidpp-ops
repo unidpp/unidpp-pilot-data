@@ -1,0 +1,188 @@
+#!/usr/bin/env bash
+# unidpp-ops — deployment backup and restore (the durability contract).
+#
+#   ./unidpp-ops backup  [name]        # snapshot the deployment (default:
+#                                      #  the tenant named by the root manifest)
+#   ./unidpp-ops restore <archive> <name> [--force]
+#   ./unidpp-ops verify <archive>      # checksums only
+#
+# What a backup is: the deployment AS DATA — the operator manifest,
+# every journal (registry root journal, run/*-journal, every tenant's
+# journals), and the seed assets — in a versioned tar.gz next to a
+# JSON sidecar carrying per-file sha256s, the UTC moment, and the log
+# tree head as the consistency point (journals are append-only; the
+# tree head at snapshot time is what a restore replays up to).
+#
+# Restore refuses to overwrite an existing tenant without --force and
+# verifies every checksum before unpacking a single file.
+
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")" && pwd)"
+BACKUPS_DIR="$ROOT/backups"
+
+die() { echo "unidpp-ops: $*" >&2; exit 1; }
+need() { command -v "$1" >/dev/null 2>&1 || die "$1 is required but not installed"; }
+need tar
+need shasum
+
+sha256_of() { shasum -a 256 "$1" | awk '{print $1}'; }
+
+manifest_name() { # deployment name from a manifest, or fallback
+  local manifest="$1"
+  python3 - "$manifest" <<'PYEOF'
+import re, sys
+text = open(sys.argv[1]).read()
+m = re.search(r'^\s*name:\s*([A-Za-z0-9._-]+)\s*$', text, re.M)
+print(m.group(1) if m else "deployment")
+PYEOF
+}
+
+cmd_backup() {
+  local tenant="${1:-$(manifest_name "$ROOT/unidpp-operator.yaml")}"
+  local stamp label archive sidecar
+  stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+  label="${tenant}-${stamp}"
+  archive="$BACKUPS_DIR/$label.tar.gz"
+  sidecar="$BACKUPS_DIR/$label.json"
+  mkdir -p "$BACKUPS_DIR"
+
+  # The consistency point: the log's signed tree head right now (best
+  # effort — a deployment without the log running still backs up).
+  local tree_head="unavailable"
+  if curl -sf -m 3 http://127.0.0.1:8392/tree/head >/tmp/unidpp-ops-head.$$ 2>/dev/null; then
+    tree_head="$(python3 -c "import json; d=json.load(open('/tmp/unidpp-ops-head.$$')); print(f\"size {d.get('tree_size')} root {d.get('root')}\")")"
+  fi
+  rm -f /tmp/unidpp-ops-head.$$
+
+  # The payload: manifest + journals + seed. Derived state (run/ logs,
+  # demo/, backups/) is excluded by construction — data, not exhaust.
+  local files=()
+  [ -f "$ROOT/unidpp-operator.yaml" ] && files+=("unidpp-operator.yaml")
+  [ -f "$ROOT/registry-journal.jsonl" ] && files+=("registry-journal.jsonl")
+  [ -f "$ROOT/jp-registry-journal.jsonl" ] && files+=("jp-registry-journal.jsonl")
+  while IFS= read -r journal; do files+=("${journal#"$ROOT"/}"); done \
+    < <(find "$ROOT/run" "$ROOT/tenants" -name '*-journal.jsonl' 2>/dev/null)
+  while IFS= read -r seed; do files+=("${seed#"$ROOT"/}"); done \
+    < <(find "$ROOT/seed" -type f 2>/dev/null)
+  [ "${#files[@]}" -ge 1 ] || die "nothing to back up (no manifest?)"
+
+  tar -czf "$archive" -C "$ROOT" "${files[@]}"
+
+  # The sidecar: every member's checksum + the consistency point.
+  python3 - "$archive" "$label" "$tree_head" "$tenant" <<'PYEOF'
+import hashlib, json, os, sys, tarfile
+archive, label, tree_head, tenant = sys.argv[1:5]
+members = {}
+with tarfile.open(archive) as tf:
+    for m in tf.getmembers():
+        if m.isfile():
+            members[m.name] = hashlib.sha256(tf.extractfile(m).read()).hexdigest()
+doc = {
+    "backup": label,
+    "tenant": tenant,
+    "taken_at_utc": label.split("-", 1)[1] if "-" in label else "",
+    "consistency_point": {"log_tree_head": tree_head},
+    "file_count": len(members),
+    "sha256": members,
+}
+with open(os.path.join(os.path.dirname(archive), label + ".json"), "w") as fh:
+    json.dump(doc, fh, indent=2, sort_keys=True)
+print(f"backup: {label}")
+print(f"  files: {len(members)}  consistency point: {tree_head}")
+PYEOF
+  echo "  archive: $archive"
+}
+
+verify_archive() { # verify <archive> -> ok | dies
+  local archive="$1" sidecar="${1%.tar.gz}.json"
+  [ -f "$archive" ] || die "no such archive: $archive"
+  [ -f "$sidecar" ] || die "no sidecar for $archive (a backup is archive+sidecar)"
+  python3 - "$archive" "$sidecar" <<'PYEOF'
+import hashlib, json, sys, tarfile
+archive, sidecar = sys.argv[1:3]
+doc = json.load(open(sidecar))
+bad = []
+with tarfile.open(archive) as tf:
+    names = {m.name for m in tf.getmembers() if m.isfile()}
+    for name, want in doc["sha256"].items():
+        if name not in names:
+            bad.append(f"missing member {name}")
+            continue
+        got = hashlib.sha256(tf.extractfile(name).read()).hexdigest()
+        if got != want:
+            bad.append(f"checksum mismatch: {name}")
+if bad:
+    print("unidpp-ops: archive FAILED verification:", file=sys.stderr)
+    for b in bad:
+        print(f"  {b}", file=sys.stderr)
+    sys.exit(1)
+print(f"verified: {len(doc['sha256'])} member(s), consistency point {doc['consistency_point']['log_tree_head']}")
+PYEOF
+}
+
+cmd_verify() { verify_archive "$1"; }
+
+cmd_restore() {
+  local archive="$1" tenant="$2" force="${3:-}"
+  [ "$force" = "--force" ] || [ -z "$force" ] || die "usage: restore <archive> <name> [--force]"
+  verify_archive "$archive"
+  local target="$ROOT/tenants/$tenant"
+  if [ -e "$target" ] && [ "$force" != "--force" ]; then
+    die "tenant '$tenant' already exists — pass --force to replace it (the existing directory is renamed aside, never deleted)"
+  fi
+  if [ -e "$target" ]; then
+    mv "$target" "$target.pre-restore.$(date -u +%Y%m%dT%H%M%SZ)"
+  fi
+  mkdir -p "$target"
+  # Restore INTO the tenant dir: the manifest lands at its root, the
+  # journals under it (paths inside tenants/<old>/ are rewritten).
+  python3 - "$archive" "$target" "$tenant" <<'PYEOF'
+import os, sys, tarfile
+archive, target, tenant = sys.argv[1:4]
+with tarfile.open(archive) as tf:
+    for m in tf.getmembers():
+        if not m.isfile():
+            continue
+        name = m.name
+        # Tenant journals from another tenant rewrite into this one.
+        parts = name.split("/")
+        if len(parts) >= 2 and parts[0] == "tenants":
+            parts[1] = tenant
+            name = "/".join(parts)
+        out = os.path.join(target, os.path.relpath(name, "unidpp-operator.yaml") if False else name)
+        os.makedirs(os.path.dirname(out), exist_ok=True)
+        with open(out, "wb") as fh:
+            fh.write(tf.extractfile(m).read())
+print(f"restored into tenants/{tenant}")
+PYEOF
+  # The restored manifest becomes the tenant's own, with its journal
+  # paths rewritten into the tenant (a restored deployment must never
+  # write the origin's journals) and its name rebased to the tenant.
+  if [ -f "$target/unidpp-operator.yaml" ]; then
+    python3 - "$target/unidpp-operator.yaml" "$tenant" <<'PYEOF'
+import re, sys
+path, tenant = sys.argv[1:3]
+text = open(path).read()
+text = re.sub(r"state_file:\s*registry-journal\.jsonl",
+              f"state_file: tenants/{tenant}/registry-journal.jsonl", text)
+text = re.sub(r"state_file:\s*jp-registry-journal\.jsonl",
+              f"state_file: tenants/{tenant}/jp-registry-journal.jsonl", text)
+text = re.sub(r"state_file:\s*tenants/[A-Za-z0-9._-]+/",
+              f"state_file: tenants/{tenant}/", text)
+text = re.sub(r"state_file:\s*run/([a-z-]+)-journal\.jsonl",
+              f"state_file: tenants/{tenant}/\\1-journal.jsonl", text)
+text = re.sub(r"^(\s*name:\s*)[A-Za-z0-9._-]+$", rf"\1{tenant}", text, count=1, flags=re.M)
+open(path, "w").write(text)
+PYEOF
+  fi
+  echo "restored manifest rewritten: journals under tenants/$tenant, name $tenant"
+  echo "review the binds in its manifest, then: ./tenants/up.sh $tenant"
+}
+
+case "${1:-}" in
+  backup)  shift; cmd_backup "${1:-}" ;;
+  restore) shift; [ "${1:-}" ] && [ "${2:-}" ] || die "usage: restore <archive> <name> [--force]"; cmd_restore "$1" "$2" "${3:-}" ;;
+  verify)  shift; [ "${1:-}" ] || die "usage: verify <archive>"; cmd_verify "$1" ;;
+  *) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+esac
