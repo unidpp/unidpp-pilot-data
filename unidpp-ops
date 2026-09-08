@@ -10,6 +10,11 @@
 #   ./unidpp-ops prune [--keep N] [--apply]
 #                                      # retention: LIST backups beyond the
 #                                      #  newest N (report-only unless --apply)
+#   ./unidpp-ops bundle <tenant> [--out dir]
+#                                      # the on-prem whitelabel artifact:
+#                                      #  manifest + declared-service
+#                                      #  binaries + runner + runbook,
+#                                      #  verified exactly like a backup
 #   ./unidpp-ops drill [--keep]        # the restore rehearsal: backup ->
 #                                      #  restore into a drill tenant ->
 #                                      #  checksums + byte parity + manifest
@@ -345,12 +350,117 @@ PYIN
   echo "drill: GREEN in $(( $(date -u +%s) - started ))s — report: backups/$label.drill.json"
 }
 
+# ---------------------------------------------------------------------------
+# bundle — the on-prem whitelabel artifact: everything a sovereign
+# customer needs on their own host, verified like a backup. The
+# manifest is the model: only the services it declares ship.
+# ---------------------------------------------------------------------------
+cmd_bundle() {
+  local tenant="${1:?usage: bundle <tenant> [--out dir]}"
+  local out_dir="${BACKUPS_DIR}"
+  if [ "$2" = "--out" ] && [ -n "${3:-}" ]; then out_dir="$3"; fi
+  local config_cli="$ROOT/../unidpp-config/target/release/unidpp-config"
+  [ -x "$config_cli" ] || die "unidpp-config binary missing (build ../unidpp-config)"
+  local manifest="$ROOT/tenants/$tenant/unidpp-operator.yaml"
+  [ -f "$manifest" ] || die "no tenant manifest at $manifest"
+  "$config_cli" validate "$manifest" >/dev/null \
+    || die "tenant manifest does not validate — fix it before bundling"
+
+  local stamp label stage archive
+  stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+  label="$tenant-bundle-$stamp"
+  stage="$(mktemp -d)"
+  archive="$out_dir/$label.tar.gz"
+  mkdir -p "$out_dir" "$stage/$tenant/bin"
+
+  # The manifest (verbatim — secrets in manifests are ${VAR} refs by
+  # construction; render-env substitutes at the target host) + state.
+  cp "$manifest" "$stage/$tenant/unidpp-operator.yaml"
+  local journals=() j
+  while IFS= read -r j; do journals+=("${j#$ROOT/}"); done \
+    < <(find "$ROOT/tenants/$tenant" -name '*.jsonl' 2>/dev/null)
+  for j in "${journals[@]}"; do
+    mkdir -p "$stage/$tenant/$(dirname "$j")"
+    cp "$ROOT/$j" "$stage/$tenant/$j"
+  done
+
+  # Binaries for exactly the declared services (the manifest is the
+  # model), the config CLI (validate/render-env on the target), the
+  # tenant runner, and this ops contract.
+  local svc bin
+  while IFS= read -r svc; do
+    bin="$ROOT/../unidpp-$svc/target/release/unidpp-$svc"
+    [ -x "$bin" ] || die "binary for declared service '$svc' missing: $bin"
+    cp "$bin" "$stage/$tenant/bin/"
+  done < <("$config_cli" services "$manifest")
+  cp "$config_cli" "$stage/$tenant/bin/"
+  cp "$ROOT/tenants/up.sh" "$stage/$tenant/"
+  cp "$ROOT/unidpp-ops" "$stage/$tenant/"
+
+  # First-boot env template: every ${VAR} the manifest references.
+  { grep -oE '\$\{[A-Z0-9_]+\}' "$manifest" || true; } | sort -u \
+    | sed 's/^\${\(.*\)}$/\1=/' > "$stage/$tenant/.env.template"
+
+  cat > "$stage/$tenant/RUNBOOK.md" <<RUNBOOK
+# $tenant — on-prem deployment bundle
+
+This bundle IS a deployment: the manifest (unidpp-operator.yaml) is
+the data; the binaries are the engine. Produced $(date -u +%Y-%m-%dT%H:%M:%SZ)Z.
+
+## First boot
+
+    ./unidpp-config validate unidpp-operator.yaml   # always validate first
+    cp .env.template .env                           # fill every \${VAR}
+    ./up.sh $tenant start                           # render-env + services
+
+Ports, state files, suites, sovereignty rules: read them from the
+manifest — the runner and the services take everything from it.
+
+## Durability
+
+    ./unidpp-ops backup    # snapshot (journals + manifest + seed)
+    ./unidpp-ops drill     # the restore rehearsal
+    ./unidpp-ops verify <archive>
+
+Full manuals: https://docs.unidpp.org (operations, manifest
+reference, every service API).
+
+## Verify this bundle
+
+    shasum -a 256 -c <(python3 -c "import json;print('\\n'.join(f'{v}  {k}' for k,v in json.load(open('bundle.json'))['sha256'].items()))")
+RUNBOOK
+
+  tar -czf "$archive" -C "$stage" "$tenant"
+  python3 - "$archive" "$label" "$tenant" "$out_dir" <<'PYIN'
+import hashlib, json, os, sys, tarfile
+archive, label, tenant, out_dir = sys.argv[1:5]
+members = {}
+with tarfile.open(archive) as tf:
+    for m in tf.getmembers():
+        if m.isfile():
+            members[m.name] = hashlib.sha256(tf.extractfile(m).read()).hexdigest()
+doc = {
+    "bundle": label,
+    "tenant": tenant,
+    "taken_at_utc": label.rsplit("-", 1)[-1],
+    "consistency_point": {"log_tree_head": "n/a (a bundle is configuration + binaries, not a journal snapshot)"},
+    "file_count": len(members),
+    "sha256": members,
+}
+json.dump(doc, open(os.path.join(out_dir, label + ".json"), "w"), indent=2, sort_keys=True)
+print(f"bundle: {label}")
+print(f"  files: {len(members)}  archive: {archive}")
+PYIN
+  rm -rf "$stage"
+}
+
 case "${1:-}" in
   backup)  shift; cmd_backup "${1:-}" ;;
   schedule) shift; cmd_schedule "${1:-}" ;;
   prune)   shift; cmd_prune "$@" ;;
   drill)   shift; cmd_drill "${1:-}" ;;
+  bundle)  shift; [ "${1:-}" ] || die "usage: bundle <tenant> [--out dir]"; cmd_bundle "$1" "${2:-}" "${3:-}" ;;
   restore) shift; [ "${1:-}" ] && [ "${2:-}" ] || die "usage: restore <archive> <name> [--force]"; cmd_restore "$1" "$2" "${3:-}" ;;
   verify)  shift; [ "${1:-}" ] || die "usage: verify <archive>"; cmd_verify "$1" ;;
-  *) sed -n '2,27p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+  *) sed -n '2,34p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac
