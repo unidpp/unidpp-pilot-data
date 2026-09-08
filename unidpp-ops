@@ -10,11 +10,14 @@
 #   ./unidpp-ops prune [--keep N] [--apply]
 #                                      # retention: LIST backups beyond the
 #                                      #  newest N (report-only unless --apply)
-#   ./unidpp-ops bundle <tenant> [--out dir]
+#   ./unidpp-ops bundle <tenant> [--data-only] [--out dir]
 #                                      # the on-prem whitelabel artifact:
 #                                      #  manifest + declared-service
 #                                      #  binaries + runner + runbook,
 #                                      #  verified exactly like a backup
+#                                      #  (--data-only: the tenant-state
+#                                      #  artifact for a deployment that
+#                                      #  already has its engine)
 #   ./unidpp-ops drill [--keep]        # the restore rehearsal: backup ->
 #                                      #  restore into a drill tenant ->
 #                                      #  checksums + byte parity + manifest
@@ -156,10 +159,15 @@ import json, os, sys, tarfile
 archive, target, tenant = sys.argv[1:4]
 origin = json.load(open(archive[:-len(".tar.gz")] + ".json")).get("tenant")
 with tarfile.open(archive) as tf:
-    for m in tf.getmembers():
-        if not m.isfile():
-            continue
-        name = m.name
+    members = [m for m in tf.getmembers() if m.isfile()]
+    # Bundle layout: every member under ONE shared top-level directory
+    # (e.g. acme-cn/...) — strip it, then the backup rules apply.
+    firsts = {m.name.split("/")[0] for m in members}
+    strip_prefix = ""
+    if len(firsts) == 1 and not any("/" not in m.name for m in members):
+        strip_prefix = next(iter(firsts)) + "/"
+    for m in members:
+        name = m.name[len(strip_prefix):] if strip_prefix else m.name
         # Only the backup's OWN tenant journals rewrite into the
         # restored one (they are the deployment's live state); other
         # tenants' journals are archive material and keep their
@@ -365,9 +373,16 @@ PYIN
 # manifest is the model: only the services it declares ship.
 # ---------------------------------------------------------------------------
 cmd_bundle() {
-  local tenant="${1:?usage: bundle <tenant> [--out dir]}"
-  local out_dir="${BACKUPS_DIR}"
-  if [ "$2" = "--out" ] && [ -n "${3:-}" ]; then out_dir="$3"; fi
+  local tenant="${1:?usage: bundle <tenant> [--data-only] [--out dir]}"
+  local out_dir="$BACKUPS_DIR" data_only=""
+  shift
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --data-only) data_only=1; shift ;;
+      --out) out_dir="$2"; shift 2 ;;
+      *) die "usage: bundle <tenant> [--data-only] [--out dir]" ;;
+    esac
+  done
   local config_cli="$ROOT/../unidpp-config/target/release/unidpp-config"
   [ -x "$config_cli" ] || die "unidpp-config binary missing (build ../unidpp-config)"
   local manifest="$ROOT/tenants/$tenant/unidpp-operator.yaml"
@@ -378,6 +393,7 @@ cmd_bundle() {
   local stamp label stage archive
   stamp="$(date -u +%Y%m%dT%H%M%SZ)"
   label="$tenant-bundle-$stamp"
+  [ -n "$data_only" ] && label="$tenant-data-$stamp"
   stage="$(mktemp -d)"
   archive="$out_dir/$label.tar.gz"
   mkdir -p "$out_dir" "$stage/$tenant/bin"
@@ -395,16 +411,20 @@ cmd_bundle() {
 
   # Binaries for exactly the declared services (the manifest is the
   # model), the config CLI (validate/render-env on the target), the
-  # tenant runner, and this ops contract.
-  local svc bin
-  while IFS= read -r svc; do
-    bin="$ROOT/../unidpp-$svc/target/release/unidpp-$svc"
-    [ -x "$bin" ] || die "binary for declared service '$svc' missing: $bin"
-    cp "$bin" "$stage/$tenant/bin/"
-  done < <("$config_cli" services "$manifest")
-  cp "$config_cli" "$stage/$tenant/bin/"
-  cp "$ROOT/tenants/up.sh" "$stage/$tenant/"
-  cp "$ROOT/unidpp-ops" "$stage/$tenant/"
+  # tenant runner, and this ops contract. The data-only artifact
+  # carries none of these: it is tenant STATE for a deployment that
+  # already has its engine.
+  if [ -z "$data_only" ]; then
+    local svc bin
+    while IFS= read -r svc; do
+      bin="$ROOT/../unidpp-$svc/target/release/unidpp-$svc"
+      [ -x "$bin" ] || die "binary for declared service '$svc' missing: $bin"
+      cp "$bin" "$stage/$tenant/bin/"
+    done < <("$config_cli" services "$manifest")
+    cp "$config_cli" "$stage/$tenant/bin/"
+    cp "$ROOT/tenants/up.sh" "$stage/$tenant/"
+    cp "$ROOT/unidpp-ops" "$stage/$tenant/"
+  fi
 
   # First-boot env template: every ${VAR} the manifest references.
   { grep -oE '\$\{[A-Z0-9_]+\}' "$manifest" || true; } | sort -u \
@@ -601,7 +621,7 @@ case "${1:-}" in
   schedule) shift; cmd_schedule "${1:-}" ;;
   prune)   shift; cmd_prune "$@" ;;
   drill)   shift; cmd_drill "${1:-}" ;;
-  bundle)  shift; [ "${1:-}" ] || die "usage: bundle <tenant> [--out dir]"; cmd_bundle "$1" "${2:-}" "${3:-}" ;;
+  bundle)  shift; [ "${1:-}" ] || die "usage: bundle <tenant> [--data-only] [--out dir]"; cmd_bundle "$@" ;;
   rehearse-upgrade) shift; cmd_rehearse ;;
   restore) shift; [ "${1:-}" ] && [ "${2:-}" ] || die "usage: restore <archive> <name> [--force]"; cmd_restore "$1" "$2" "${3:-}" ;;
   verify)  shift; [ "${1:-}" ] || die "usage: verify <archive>"; cmd_verify "$1" ;;

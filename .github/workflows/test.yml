@@ -101,6 +101,14 @@ jobs:
           ./unidpp-ops restore "$archive" ci-restored
       - name: The drill
         run: ./unidpp-ops drill
+      - name: 'The data-only bundle restores as a tenant'
+        run: |
+          set -eu
+          ./unidpp-ops bundle acme-cn --data-only
+          data="$(printf '%s\n' backups/acme-cn-data-*.tar.gz | sort -r | head -1)"
+          ./unidpp-ops verify "$data"
+          ./unidpp-ops restore "$data" acme-cn-moved
+          ../unidpp-config/target/release/unidpp-config validate tenants/acme-cn-moved/unidpp-operator.yaml
       - name: The bundle
         run: |
           set -eu
