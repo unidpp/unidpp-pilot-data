@@ -454,12 +454,146 @@ PYIN
   rm -rf "$stage"
 }
 
+# ---------------------------------------------------------------------------
+# rehearse-upgrade — the operator's upgrade drill: backup -> rebuild
+# the binaries -> restart (journals replay) -> prove the state equal
+# and the journals append-only. An upgrade never rehearsed is an
+# outage waiting for a calendar slot.
+# ---------------------------------------------------------------------------
+svc_bind() { # svc_bind <service> — from the manifest's rendered env
+  local rendered
+  rendered="$("$ROOT/../unidpp-config/target/release/unidpp-config" \
+    render-env "$1" "$ROOT/unidpp-operator.yaml" 2>/dev/null \
+    | grep -E '^UNIDPP_[A-Z_]*BIND=' | head -1)" || true
+  printf '%s' "${rendered#*=}"
+}
+
+# Domain readings (what the state IS, not just file sizes) + journal
+# line counts. Binds come from the manifest (svc_bind) — the pilot's
+# ops never hardcodes ports.
+rehearse_readings() { # rehearse_readings <binds-map>
+  python3 - "$ROOT" "$1" <<'PYIN'
+import json, os, sys, urllib.request
+root, binds = sys.argv[1], sys.argv[2]
+ports = dict(kv.split("=", 1) for kv in binds.split(",") if "=" in kv)
+def get(path):
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{path}", timeout=3) as r:
+            return json.load(r)
+    except Exception:
+        return None
+readings = {}
+if "registry" in ports:
+    doc = get(f"{ports['registry']}/items")
+    readings["registry_items"] = len(doc["items"]) if doc else None
+if "trust" in ports:
+    doc = get(f"{ports['trust']}/revocations")
+    readings["trust_revocations"] = len(doc["revocations"]) if doc else None
+if "log" in ports:
+    doc = get(f"{ports['log']}/tree/head")
+    readings["log_tree_size"] = doc["tree_size"] if doc else None
+lines = {}
+for rel in ["registry-journal.jsonl", "jp-registry-journal.jsonl"]:
+    p = os.path.join(root, rel)
+    if os.path.exists(p):
+        lines[rel] = sum(1 for _ in open(p))
+for sub in ["run", "tenants"]:
+    base = os.path.join(root, sub)
+    for dirpath, _dirs, files in os.walk(base):
+        for f in files:
+            if f.endswith("-journal.jsonl") or (sub == "tenants" and f.endswith(".jsonl")):
+                rel = os.path.relpath(os.path.join(dirpath, f), root)
+                lines[rel] = sum(1 for _ in open(os.path.join(dirpath, f)))
+readings["journal_lines"] = lines
+print(json.dumps(readings, sort_keys=True))
+PYIN
+}
+
+cmd_rehearse() {
+  local config_cli="$ROOT/../unidpp-config/target/release/unidpp-config"
+  [ -x "$config_cli" ] || die "unidpp-config binary missing (build ../unidpp-config)"
+  local label="upgrade-$(date -u +%Y%m%dT%H%M%SZ)"
+  local started="$(date -u +%s)"
+
+  local binds="" svc
+  for svc in registry trust log issuer; do
+    binds="${binds:+$binds,}$svc=$(svc_bind "$svc")"
+  done
+
+  echo "rehearse: 1/5 backup"
+  cmd_backup upgrade >/dev/null
+  local archive
+  archive="$(ls -1t "$BACKUPS_DIR"/upgrade-*.tar.gz 2>/dev/null | head -1)"
+  [ -n "$archive" ] || die "rehearse: no backup archive produced"
+
+  echo "rehearse: 2/5 before-readings"
+  rehearse_readings "$binds" > "$BACKUPS_DIR/$label.before.json"
+
+  echo "rehearse: 3/5 rebuild (the binary swap)"
+  local repo
+  for repo in unidpp-registry unidpp-trust unidpp-log unidpp-issuer \
+              unidpp-projector unidpp-gateway unidpp-archive unidpp-console; do
+    (cd "$ROOT/../$repo" && cargo build --release >/dev/null 2>&1) \
+      || die "rehearse: rebuild failed: $repo"
+  done
+
+  echo "rehearse: 4/5 restart (journals replay on the new binaries)"
+  "$ROOT/stack.sh" stop >/dev/null
+  "$ROOT/stack.sh" start >/dev/null
+
+  echo "rehearse: 5/5 after-readings, parity, append-only proof"
+  rehearse_readings "$binds" > "$BACKUPS_DIR/$label.after.json"
+  local upgrade_failed=0
+  python3 - "$archive" "$BACKUPS_DIR/$label.before.json" \
+    "$BACKUPS_DIR/$label.after.json" "$BACKUPS_DIR/$label.json" "$ROOT" <<'PYIN' || upgrade_failed=1
+import json, sys, tarfile
+archive, before_p, after_p, report_p, root = sys.argv[1:6]
+before = json.load(open(before_p))
+after = json.load(open(after_p))
+domain_equal = all(before[k] == after[k] for k in ("registry_items", "trust_revocations", "log_tree_size") if before.get(k) is not None)
+journal_equal = before["journal_lines"] == after["journal_lines"]
+# Append-only proof: every journal the backup captured is a byte
+# prefix of the live journal (the upgrade rewrote nothing).
+prefix_ok, prefix_total = 0, 0
+with tarfile.open(archive) as tf:
+    for m in tf.getmembers():
+        if not (m.isfile() and m.name.endswith(".jsonl")):
+            continue
+        prefix_total += 1
+        archived = tf.extractfile(m).read()
+        live = open(f"{root}/{m.name}", "rb").read()
+        if live.startswith(archived):
+            prefix_ok += 1
+ok = domain_equal and journal_equal and prefix_ok == prefix_total
+report = {
+    "upgrade": before_p.rsplit(".", 1)[0].rsplit(".", 1)[0].split("/")[-1],
+    "domain_readings_equal": domain_equal,
+    "journal_lines_equal": journal_equal,
+    "append_only": f"{prefix_ok}/{prefix_total} backup journals are live-prefix-compatible",
+    "before": before, "after": after,
+    "result": "GREEN" if ok else "FAILED",
+}
+json.dump(report, open(report_p, "w"), indent=2, sort_keys=True)
+print(f"  domain readings equal: {domain_equal}")
+print(f"  journal lines equal:   {journal_equal}")
+print(f"  append-only:           {prefix_ok}/{prefix_total}")
+if not ok:
+    sys.exit(1)
+PYIN
+  if [ "$upgrade_failed" = 1 ]; then
+    die "rehearse FAILED (report kept: backups/$label.json)"
+  fi
+  rm -f "$BACKUPS_DIR/$label.before.json" "$BACKUPS_DIR/$label.after.json"
+  echo "rehearse: GREEN in $(( $(date -u +%s) - started ))s — report: backups/$label.json"
+}
+
 case "${1:-}" in
   backup)  shift; cmd_backup "${1:-}" ;;
   schedule) shift; cmd_schedule "${1:-}" ;;
   prune)   shift; cmd_prune "$@" ;;
   drill)   shift; cmd_drill "${1:-}" ;;
   bundle)  shift; [ "${1:-}" ] || die "usage: bundle <tenant> [--out dir]"; cmd_bundle "$1" "${2:-}" "${3:-}" ;;
+  rehearse-upgrade) shift; cmd_rehearse ;;
   restore) shift; [ "${1:-}" ] && [ "${2:-}" ] || die "usage: restore <archive> <name> [--force]"; cmd_restore "$1" "$2" "${3:-}" ;;
   verify)  shift; [ "${1:-}" ] || die "usage: verify <archive>"; cmd_verify "$1" ;;
   *) sed -n '2,34p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
