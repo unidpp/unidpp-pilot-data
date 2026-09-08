@@ -231,6 +231,11 @@ cmd_start() {
     UNIDPP_ARCHIVE_SNAPSHOT_DIR="$RUN_DIR/archive-snapshots" \
     UNIDPP_LOG_URL=http://127.0.0.1:8392
 
+  # The admin console: the operator manifest as its configuration.
+  start_service console unidpp-console 8389 60 \
+    UNIDPP_CONSOLE_BIND=127.0.0.1:8389 \
+    UNIDPP_CONSOLE_MANIFEST="$PILOT_DIR/unidpp-operator.yaml"
+
   # The JP national peer node: the same binary, its own journal — a
   # second jurisdiction on the same machine (the deployment shape the
   # registry starter kit demonstrates).
@@ -250,7 +255,7 @@ cmd_start() {
 # ---------------------------------------------------------------------------
 cmd_stop() {
   local name pid
-  for name in archive gateway projector issuer log trust registry jp-registry tunnel jp-tunnel; do
+  for name in console archive gateway projector issuer log trust registry jp-registry tunnel jp-tunnel; do
     local pidfile="$RUN_DIR/$name.pid"
     if [[ -f "$pidfile" ]]; then
       pid="$(cat "$pidfile")"
