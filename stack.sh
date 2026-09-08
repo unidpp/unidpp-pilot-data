@@ -181,41 +181,34 @@ ensure_tunnel() {
   echo $! > "$pidfile"
 }
 
-ensure_jp_tunnel() {
-  local pidfile="$RUN_DIR/jp-tunnel.pid" logfile="$RUN_DIR/jp-tunnel.log"
-  if [[ ! -s "$PILOT_DIR/jp-tunnel.token" ]]; then
-    echo "==> no jp-tunnel.token — skipping the JP node's public tunnel"
+# A named tunnel for one public hostname: adopt the running
+# cloudflared (pid file alive), else start it from the connector
+# token. Absent token file or missing cloudflared skip cleanly —
+# provisioning (tunnel + DNS record) is a one-time operator act
+# (README, "Public trust and log services").
+ensure_named_tunnel() { # ensure_named_tunnel <token-file-stem> <hostname> <port>
+  local stem="$1" hostname="$2" port="$3"
+  local pidfile="$RUN_DIR/$stem.pid" logfile="$RUN_DIR/$stem.log"
+  if [[ ! -s "$PILOT_DIR/$stem.token" ]]; then
+    echo "==> no $stem.token — $hostname stays loopback-only"
     return 0
   fi
   command -v cloudflared >/dev/null 2>&1 \
-    || { echo "==> jp-tunnel.token present but cloudflared is not installed — skipping"; return 0; }
+    || { echo "==> $stem.token present but cloudflared is not installed — skipping"; return 0; }
   if [[ -f "$pidfile" ]] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then
-    echo "==> jp-tunnel: already running (pid $(cat "$pidfile"))"
+    echo "==> $stem-tunnel: already running (pid $(cat "$pidfile"))"
     return 0
   fi
-  echo "==> starting cloudflared named tunnel (registry-jp.unidpp.org -> 8399)"
-  nohup cloudflared tunnel run --token "$(cat "$PILOT_DIR/jp-tunnel.token")" \
-    --url http://127.0.0.1:8399 > "$logfile" 2>&1 &
+  echo "==> starting cloudflared named tunnel ($hostname -> $port)"
+  nohup cloudflared tunnel run --token "$(cat "$PILOT_DIR/$stem.token")" \
+    --url "http://127.0.0.1:$port" > "$logfile" 2>&1 &
   echo $! > "$pidfile"
 }
 
-ensure_console_tunnel() {
-  local pidfile="$RUN_DIR/console-tunnel.pid" logfile="$RUN_DIR/console-tunnel.log"
-  if [[ ! -s "$PILOT_DIR/console-tunnel.token" ]]; then
-    echo "==> no console-tunnel.token — the console stays loopback-only"
-    return 0
-  fi
-  command -v cloudflared >/dev/null 2>&1 \
-    || { echo "==> console-tunnel.token present but cloudflared is not installed — skipping"; return 0; }
-  if [[ -f "$pidfile" ]] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then
-    echo "==> console-tunnel: already running (pid $(cat "$pidfile"))"
-    return 0
-  fi
-  echo "==> starting cloudflared named tunnel (console.unidpp.org -> 8389)"
-  nohup cloudflared tunnel run --token "$(cat "$PILOT_DIR/console-tunnel.token")" \
-    --url http://127.0.0.1:8389 > "$logfile" 2>&1 &
-  echo $! > "$pidfile"
-}
+ensure_trust_tunnel() { ensure_named_tunnel trust-tunnel trust.unidpp.org 8391; }
+ensure_log_tunnel()   { ensure_named_tunnel log-tunnel   log.unidpp.org   8392; }
+ensure_jp_tunnel()    { ensure_named_tunnel jp-tunnel    registry-jp.unidpp.org 8399; }
+ensure_console_tunnel() { ensure_named_tunnel console-tunnel console.unidpp.org 8389; }
 
 # ---------------------------------------------------------------------------
 cmd_start() {
@@ -271,6 +264,8 @@ cmd_start() {
   ensure_tunnel
   ensure_jp_tunnel
   ensure_console_tunnel
+  ensure_trust_tunnel
+  ensure_log_tunnel
 
   echo
   echo "==> stack up: 8390 registry · 8391 trust · 8392 log · 8393 issuer"
@@ -306,7 +301,9 @@ cmd_status() {
     "issuer:unidpp-issuer:8393" \
     "projector:unidpp-projector:8394" \
     "gateway:unidpp-gateway:8395" \
-    "archive:unidpp-archive:8396"; do
+    "archive:unidpp-archive:8396" \
+    "console:unidpp-console:8389" \
+    "jp-registry:unidpp-registry:8399"; do
     local name rest repo port
     name="${spec%%:*}"; rest="${spec#*:}"; repo="${rest%%:*}"; port="${rest##*:}"
     if is_ours "$port" "$repo"; then
@@ -331,14 +328,29 @@ cmd_status() {
   if healthz 8392; then
     echo "  log tree head: $(curl -sf -m 3 http://127.0.0.1:8392/tree/head | jq -r '"size \(.tree_size) · root \(.root[0:16])…"' 2>/dev/null || echo '?')"
   fi
-  if [[ -f "$RUN_DIR/tunnel.pid" ]] && kill -0 "$(cat "$RUN_DIR/tunnel.pid")" 2>/dev/null; then
-    echo "  tunnel: running (pid $(cat "$RUN_DIR/tunnel.pid")) -> registry.unidpp.org"
-  fi
-  if [[ -f "$RUN_DIR/jp-tunnel.pid" ]] && kill -0 "$(cat "$RUN_DIR/jp-tunnel.pid")" 2>/dev/null; then
-    echo "  jp-tunnel: running (pid $(cat "$RUN_DIR/jp-tunnel.pid")) -> registry-jp.unidpp.org"
-  else
-    echo "  tunnel: not running"
-  fi
+  # Tunnels + the public truth: a tunnel process can be alive while
+  # its origin is down (502) — probe the public hostname itself.
+  local tstem thost tport
+  for spec in \
+    "tunnel:registry.unidpp.org" \
+    "jp-tunnel:registry-jp.unidpp.org" \
+    "console-tunnel:console.unidpp.org" \
+    "trust-tunnel:trust.unidpp.org" \
+    "log-tunnel:log.unidpp.org"; do
+    tstem="${spec%%:*}"; thost="${spec#*:}"
+    if [[ -f "$RUN_DIR/$tstem.pid" ]] && kill -0 "$(cat "$RUN_DIR/$tstem.pid")" 2>/dev/null; then
+      local pub
+      pub="$(curl -s -m 5 -o /dev/null -w '%{http_code}' "https://$thost/healthz" 2>/dev/null)"
+      if [[ "$pub" == "200" ]]; then
+        echo "  $tstem: running -> https://$thost (public 200)"
+      else
+        echo "  $tstem: running -> https://$thost (public $pub — origin unreachable?)"
+        failed=1
+      fi
+    else
+      echo "  $tstem: not running ($thost dark)"
+    fi
+  done
   [[ -d "$DEMO_DIR" ]] && echo "  demo artifacts: $(ls "$DEMO_DIR" 2>/dev/null | wc -l | tr -d ' ') files under demo/"
   exit "$failed"
 }

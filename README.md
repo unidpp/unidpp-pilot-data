@@ -113,6 +113,63 @@ tunnel from `tunnel.token`.
      -d '{"type":"CNAME","name":"pilot","content":"f45249fa-0190-4ae8-b98c-1dc39c5010c8.cfargotunnel.com","proxied":true}'
 2. Or create the CNAME in the dashboard: pilot.unidpp.org → f45249fa-0190-4ae8-b98c-1dc39c5010c8.cfargotunnel.com (proxied)
 
+## Always-on: status, repair, and the PID discipline
+
+The pilot is the always-on demo host. Two commands are the whole
+operating loop (TODO.impl 115):
+
+- `./stack.sh status` — the truth: every service (incl. the console
+  and the JP node), journal state, and **the public hostname probed
+  through the tunnel** — a live tunnel process with a dead origin
+  answers 502 and status says so. Exits non-zero when anything is
+  down or publicly unreachable.
+- `./stack.sh start` — the idempotent repair: healthy services are
+  reused untouched, dead ones are restarted (journals replay), and
+  every tunnel is re-ensured. A second run is a no-op.
+
+**PID discipline (learned the hard way):** never `pkill`/`killall`
+by process name on this box — the pilot's services share binary
+names with test instances (a name-based `pkill unidpp-registry`
+once killed the pilot's registry and JP node while their tunnels
+kept answering 502 publicly). Kill by the exact PID from
+`run/*.pid`, or `./stack.sh stop`. After any local test run that
+spawned services, `./stack.sh status` to confirm the pilot's
+integrity.
+
+A cron watch is the always-on pattern on a laptop-class host:
+
+```cron
+*/10 * * * * cd <pilot-dir> && ./stack.sh start >/dev/null 2>&1
+```
+
+## Public trust and log services (TODO.impl 114)
+
+The verifier-facing services are public alongside the registries:
+`trust.unidpp.org` → 127.0.0.1:8391 (anchors: `GET /keyring`),
+`log.unidpp.org` → 127.0.0.1:8392 (`GET /tree/head`). `stack.sh`
+runs both tunnels from `trust-tunnel.token` / `log-tunnel.token` the
+moment those files exist (same pattern as the JP and console
+tunnels; `stack.sh status` reports them either way).
+
+One-time provisioning per tunnel (needs a Cloudflare API token with
+Account → Cloudflare Tunnel → Edit and Zone → DNS → Edit — the
+token in `~/.config/cloudflare-tokens/unidpp-admin` is currently
+**expired**, re-create it first):
+
+```sh
+TOKEN=<valid-token>
+# 1. create the tunnel, keep the returned id + connector token
+curl -X POST "https://api.cloudflare.com/client/v4/accounts/af1920686175ca6d92a677e02bdda75d/cfd_tunnel" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"name":"unidpp-pilot-trust","config_src":"cloudflare"}'
+echo '<connector-token>' > trust-tunnel.token    # gitignored
+# 2. the DNS record (repeat with "log"/log-tunnel for the log service)
+curl -X POST "https://api.cloudflare.com/client/v4/zones/5912805a2be5db3c5070e4063746de9e/dns_records" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"type":"CNAME","name":"trust","content":"<tunnel-id>.cfargotunnel.com","proxied":true}'
+# 3. activate: ./stack.sh start && ./stack.sh status
+```
+
 ## State (2026-09-07)
 
 - Full stack up (8390-8396) via `./stack.sh start`; all services
