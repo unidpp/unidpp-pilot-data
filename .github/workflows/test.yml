@@ -80,8 +80,8 @@ jobs:
       - name: Build the stack
         run: |
           set -eu
-          for repo in unidpp-config unidpp-registry unidpp-trust unidpp-log \
-                      unidpp-issuer unidpp-projector unidpp-gateway \
+          for repo in unidpp-cli unidpp-config unidpp-registry unidpp-trust \
+                      unidpp-log unidpp-issuer unidpp-projector unidpp-gateway \
                       unidpp-archive unidpp-console; do
             cargo build --release --manifest-path "../$repo/Cargo.toml"
           done
