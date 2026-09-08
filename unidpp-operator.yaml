@@ -10,6 +10,7 @@ services:
   registry:
     bind: 127.0.0.1:8390
     state_file: registry-journal.jsonl
+    public_url: https://registry.unidpp.org
   trust:
     bind: 127.0.0.1:8391
     state_file: run/trust-journal.jsonl
@@ -29,5 +30,8 @@ services:
     issuer_url: http://127.0.0.1:8393
   archive:
     bind: 127.0.0.1:8396
+  console:
+    bind: 127.0.0.1:8389
+    public_url: https://console.unidpp.org
 sovereignty:
   external_calls: external
