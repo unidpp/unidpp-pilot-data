@@ -134,3 +134,24 @@ mappings); jurisdiction-shaped data lives with the jurisdiction. The
 tunnel (`jp-tunnel.token`) and DNS record (`registry-jp.unidpp.org`)
 are provisioned once via the Cloudflare API; `./stack.sh start` runs
 node and tunnel together with the rest of the stack.
+
+## The admin console and the tenants
+
+`console.unidpp.org` (loopback 8389) is the operator console: the
+dashboard, the operator manifest as an editable validated
+configuration, the registry browser, passports with inline pack
+verification, and the branding preview. The deployment it manages is
+declared in `unidpp-operator.yaml` — the same file `unidpp-config`
+validates and renders service environments from.
+
+`tenants/` holds whitelabel and sovereign deployments, run by
+`tenants/up.sh <name>`:
+
+- **acme** (whitelabel, EU residency): ACME Mobility branding,
+  ecdsa-p256 packs, ports 9390/9393/9389.
+- **acme-cn** (sovereign, CN residency): ACME 华动 branding, **sm2-only
+  packs**, egress none — validated by the manifest itself (sovereign
+  profiles refuse external calls without a recorded reason).
+
+Zero code differs between the reference deployment and a tenant: the
+manifest is the product.

@@ -1,0 +1,27 @@
+api_version: unidpp.org/v1
+deployment:
+  name: acme-eu
+  profile: whitelabel
+  base_url: https://dpp.acme-mobility.example.org
+branding:
+  organization: ACME Mobility
+  product_name: ACME Digital Product Passport
+  theme:
+    primary: "#7c3aed"
+    accent: "#f59e0b"
+  footer:
+    legal_url: https://www.acme-mobility.example.org/legal
+    contact_url: mailto:dpp@acme-mobility.example.org
+services:
+  registry:
+    bind: 127.0.0.1:9390
+    state_file: tenants/acme/registry-journal.jsonl
+  issuer:
+    bind: 127.0.0.1:9393
+    state_file: tenants/acme/issuer-journal.jsonl
+    pack_suites: [ecdsa-p256]
+  console:
+    bind: 127.0.0.1:9389
+sovereignty:
+  data_residency: EU
+  external_calls: none

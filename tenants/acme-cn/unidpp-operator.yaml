@@ -1,0 +1,24 @@
+api_version: unidpp.org/v1
+deployment:
+  name: acme-cn
+  profile: sovereign
+  base_url: https://dpp.acme.cn.example.org
+branding:
+  organization: ACME 华动
+  product_name: ACME 产品数字护照
+  theme:
+    primary: "#b91c1c"
+    accent: "#991b1b"
+services:
+  registry:
+    bind: 127.0.0.1:9590
+    state_file: tenants/acme-cn/registry-journal.jsonl
+  issuer:
+    bind: 127.0.0.1:9593
+    state_file: tenants/acme-cn/issuer-journal.jsonl
+    pack_suites: [sm2]
+  console:
+    bind: 127.0.0.1:9589
+sovereignty:
+  data_residency: CN
+  external_calls: none

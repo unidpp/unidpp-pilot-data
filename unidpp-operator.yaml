@@ -1,0 +1,33 @@
+api_version: unidpp.org/v1
+deployment:
+  name: unidpp-reference
+  profile: reference
+  base_url: https://registry.unidpp.org
+branding:
+  organization: UniDPP
+  product_name: UniDPP Reference Deployment
+services:
+  registry:
+    bind: 127.0.0.1:8390
+    state_file: registry-journal.jsonl
+  trust:
+    bind: 127.0.0.1:8391
+    state_file: run/trust-journal.jsonl
+  log:
+    bind: 127.0.0.1:8392
+    log_id: unidpp-pilot-log-1
+    state_file: run/log-journal.jsonl
+    external_tsa_url: http://timestamp.digicert.com
+  issuer:
+    bind: 127.0.0.1:8393
+    pack_suites: [ecdsa-p256, sm2]
+    registry_url: http://127.0.0.1:8390
+  projector:
+    bind: 127.0.0.1:8394
+  gateway:
+    bind: 127.0.0.1:8395
+    issuer_url: http://127.0.0.1:8393
+  archive:
+    bind: 127.0.0.1:8396
+sovereignty:
+  external_calls: external
