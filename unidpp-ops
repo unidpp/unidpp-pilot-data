@@ -284,9 +284,13 @@ cmd_prune() {
 # touches production state; removes what it created unless --keep.
 # ---------------------------------------------------------------------------
 cmd_drill() {
+  if [ "${1:-}" = "--recover" ]; then
+    drill_recover
+    return $?
+  fi
   local keep_tenant="${1:-}"
   [ "$keep_tenant" = "--keep" ] || [ -z "$keep_tenant" ] \
-    || die "usage: drill [--keep]"
+    || die "usage: drill [--keep|--recover]"
   local started drill_tenant archive label
   started="$(date -u +%s)"
   drill_tenant="drill-$(date -u +%Y%m%dT%H%M%SZ)"
@@ -574,7 +578,7 @@ cmd_rehearse() {
   rehearse_readings "$binds" > "$BACKUPS_DIR/$label.after.json"
   local upgrade_failed=0
   python3 - "$archive" "$BACKUPS_DIR/$label.before.json" \
-    "$BACKUPS_DIR/$label.after.json" "$BACKUPS_DIR/$label.json" "$ROOT" <<'PYIN' || upgrade_failed=1
+    "$BACKUPS_DIR/$label.after.json" "$BACKUPS_DIR/$label.report.json" "$ROOT" <<'PYIN' || upgrade_failed=1
 import json, sys, tarfile
 archive, before_p, after_p, report_p, root = sys.argv[1:6]
 before = json.load(open(before_p))
@@ -610,10 +614,118 @@ if not ok:
     sys.exit(1)
 PYIN
   if [ "$upgrade_failed" = 1 ]; then
-    die "rehearse FAILED (report kept: backups/$label.json)"
+    die "rehearse FAILED (report kept: backups/$label.report.json)"
   fi
   rm -f "$BACKUPS_DIR/$label.before.json" "$BACKUPS_DIR/$label.after.json"
-  echo "rehearse: GREEN in $(( $(date -u +%s) - started ))s — report: backups/$label.json"
+  echo "rehearse: GREEN in $(( $(date -u +%s) - started ))s — report: backups/$label.report.json"
+}
+
+# ---------------------------------------------------------------------------
+# recover — disaster recovery: the deployment back at its ORIGINAL
+# shape. Restore lands a backup as a tenant (migration, rehearsal);
+# recover is for catastrophe: the root manifest, the root journals,
+# the seed — the same deployment, standing up again.
+# ---------------------------------------------------------------------------
+cmd_recover() {
+  local archive="${1:?usage: recover <archive> [--force]}" force="${2:-}"
+  [ "$force" = "--force" ] || [ -z "$force" ] \
+    || die "usage: recover <archive> [--force]"
+  verify_archive "$archive"
+
+  # Journals are held open by running services — refuse while any is
+  # up (the rename-aside would strand live state).
+  local pidfile pid
+  for pidfile in "$ROOT"/run/*.pid; do
+    [ -f "$pidfile" ] || continue
+    pid="$(cat "$pidfile" 2>/dev/null || true)"
+    [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null \
+      && die "a pilot service is still running (pid $pid, $pidfile) — stop first: ./stack.sh stop"
+  done
+
+  # An interrupted recovery leaves *.pre-recover.* behind: that is
+  # evidence to investigate, not state to overwrite.
+  local leftover
+  leftover="$(ls -d "$ROOT"/*.pre-recover.* "$ROOT"/run.pre-recover.* "$ROOT"/tenants.pre-recover.* 2>/dev/null | head -1 || true)"
+  if [ -n "$leftover" ] && [ "$force" != "--force" ]; then
+    die "a pre-recover rename-aside already exists ($leftover) — a prior recovery may be interrupted; inspect it, move it, or pass --force"
+  fi
+
+  local stamp targets target
+  stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+  # Rename the current live state aside — never delete.
+  for target in unidpp-operator.yaml registry-journal.jsonl \
+                jp-registry-journal.jsonl run tenants seed; do
+    if [ -e "$ROOT/$target" ]; then
+      mv "$ROOT/$target" "$ROOT/$target.pre-recover.$stamp"
+      echo "recover: set aside $target -> $target.pre-recover.$stamp"
+    fi
+  done
+
+  # Every member to its ORIGINAL path — no tenant rewriting, no
+  # manifest rewriting: this deployment recovering itself.
+  python3 - "$archive" "$ROOT" <<'PYIN'
+import os, sys, tarfile
+archive, root = sys.argv[1:3]
+with tarfile.open(archive) as tf:
+    for m in tf.getmembers():
+        if not m.isfile():
+            continue
+        out = os.path.join(root, m.name)
+        os.makedirs(os.path.dirname(out), exist_ok=True)
+        with open(out, "wb") as fh:
+            fh.write(tf.extractfile(m).read())
+    print(f"recover: unpacked {sum(1 for m in tf.getmembers() if m.isfile())} member(s) at original paths")
+PYIN
+
+  echo "recover: done. Bring it back:"
+  echo "  ./stack.sh start && ./stack.sh status"
+  echo "  ./seed-pilot.sh        # idempotent (re-runs reuse journaled state)"
+  echo "the rename-aside state survives under *.pre-recover.$stamp — remove nothing until the recovery is proven."
+}
+
+# ---------------------------------------------------------------------------
+# drill --recover — the disaster-recovery rehearsal: the backup's
+# members unpacked at their ORIGINAL relative shape under a scratch
+# root, byte-verified — the root recovery path proven without
+# touching the live deployment.
+# ---------------------------------------------------------------------------
+drill_recover() {
+  local label="recover-drill-$(date -u +%Y%m%dT%H%M%SZ)"
+  cmd_backup drill >/dev/null
+  local archive scratch
+  archive="$(printf '%s\n' "$BACKUPS_DIR"/drill-*.tar.gz | sort -r | head -1)"
+  [ -n "$archive" ] || die "recover drill: no backup produced"
+  scratch="$(mktemp -d)"
+  echo "recover-drill: unpack $label at original shape under $scratch"
+  python3 - "$archive" "$scratch" "$BACKUPS_DIR/$label.json" <<'PYIN' || return 1
+import hashlib, json, sys, tarfile
+archive, scratch, report_path = sys.argv[1:4]
+doc = json.load(open(archive[:-len(".tar.gz")] + ".json"))
+byte_equal, checked = 0, 0
+with tarfile.open(archive) as tf:
+    for m in tf.getmembers():
+        if not m.isfile():
+            continue
+        out = f"{scratch}/{m.name}"
+        import os
+        os.makedirs(os.path.dirname(out), exist_ok=True)
+        with open(out, "wb") as fh:
+            fh.write(tf.extractfile(m).read())
+        checked += 1
+        if hashlib.sha256(open(out, "rb").read()).hexdigest() == doc["sha256"][m.name]:
+            byte_equal += 1
+report = {
+    "drill": sys.argv[0] if False else "recover",
+    "label": archive.rsplit("/", 1)[-1],
+    "shape": "original (no tenant rewriting, no manifest rewriting)",
+    "byte_parity": f"{byte_equal}/{checked} members byte-identical at original paths",
+}
+json.dump(report, open(report_path, "w"), indent=2, sort_keys=True)
+print(f"  byte parity at original shape: {byte_equal}/{checked}")
+sys.exit(0 if byte_equal == checked else 1)
+PYIN
+  rm -rf "$scratch"
+  echo "recover-drill: GREEN — report: backups/$label.json"
 }
 
 case "${1:-}" in
@@ -623,6 +735,7 @@ case "${1:-}" in
   drill)   shift; cmd_drill "${1:-}" ;;
   bundle)  shift; [ "${1:-}" ] || die "usage: bundle <tenant> [--data-only] [--out dir]"; cmd_bundle "$@" ;;
   rehearse-upgrade) shift; cmd_rehearse ;;
+  recover) shift; [ "${1:-}" ] || die "usage: recover <archive> [--force]"; cmd_recover "$1" "${2:-}" ;;
   restore) shift; [ "${1:-}" ] && [ "${2:-}" ] || die "usage: restore <archive> <name> [--force]"; cmd_restore "$1" "$2" "${3:-}" ;;
   verify)  shift; [ "${1:-}" ] || die "usage: verify <archive>"; cmd_verify "$1" ;;
   *) sed -n '2,34p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;

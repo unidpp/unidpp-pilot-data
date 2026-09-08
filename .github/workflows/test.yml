@@ -101,6 +101,8 @@ jobs:
           ./unidpp-ops restore "$archive" ci-restored
       - name: The drill
         run: ./unidpp-ops drill
+      - name: 'The recover drill (original shape)'
+        run: ./unidpp-ops drill --recover
       - name: 'The data-only bundle restores as a tenant'
         run: |
           set -eu
