@@ -210,8 +210,17 @@ schedule_line() {
 
 cmd_schedule() {
   local install="${1:-}"
+  if [ "$install" = "--status" ]; then
+    if printf '%s\n' "$(crontab -l 2>/dev/null || true)" \
+      | grep -Fq "$SCHEDULE_MARKER"; then
+      echo "installed: the nightly backup runs at 03:17 (crontab -l)"
+    else
+      echo "not installed — pass --install to add the nightly backup cron"
+    fi
+    return 0
+  fi
   [ "$install" = "--install" ] || [ -z "$install" ] \
-    || die "usage: schedule [--install]"
+    || die "usage: schedule [--install|--status]"
   if [ "$install" != "--install" ]; then
     echo "cron line (print-only; pass --install to add it to the crontab):"
     schedule_line; echo
