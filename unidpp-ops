@@ -5,6 +5,15 @@
 #                                      #  the tenant named by the root manifest)
 #   ./unidpp-ops restore <archive> <name> [--force]
 #   ./unidpp-ops verify <archive>      # checksums only
+#   ./unidpp-ops schedule [--install]  # the nightly backup cron line
+#                                      #  (--install merges it idempotently)
+#   ./unidpp-ops prune [--keep N] [--apply]
+#                                      # retention: LIST backups beyond the
+#                                      #  newest N (report-only unless --apply)
+#   ./unidpp-ops drill [--keep]        # the restore rehearsal: backup ->
+#                                      #  restore into a drill tenant ->
+#                                      #  checksums + byte parity + manifest
+#                                      #  validation -> JSON drill report
 #
 # What a backup is: the deployment AS DATA — the operator manifest,
 # every journal (registry root journal, run/*-journal, every tenant's
@@ -138,23 +147,28 @@ cmd_restore() {
   # Restore INTO the tenant dir: the manifest lands at its root, the
   # journals under it (paths inside tenants/<old>/ are rewritten).
   python3 - "$archive" "$target" "$tenant" <<'PYEOF'
-import os, sys, tarfile
+import json, os, sys, tarfile
 archive, target, tenant = sys.argv[1:4]
+origin = json.load(open(archive[:-len(".tar.gz")] + ".json")).get("tenant")
 with tarfile.open(archive) as tf:
     for m in tf.getmembers():
         if not m.isfile():
             continue
         name = m.name
-        # Tenant journals from another tenant rewrite into this one.
+        # Only the backup's OWN tenant journals rewrite into the
+        # restored one (they are the deployment's live state); other
+        # tenants' journals are archive material and keep their
+        # original tenant path — rewriting them all would collide
+        # sibling tenants onto the same filenames.
         parts = name.split("/")
-        if len(parts) >= 2 and parts[0] == "tenants":
+        if len(parts) >= 2 and parts[0] == "tenants" and parts[1] == origin:
             parts[1] = tenant
             name = "/".join(parts)
         out = os.path.join(target, os.path.relpath(name, "unidpp-operator.yaml") if False else name)
         os.makedirs(os.path.dirname(out), exist_ok=True)
         with open(out, "wb") as fh:
             fh.write(tf.extractfile(m).read())
-print(f"restored into tenants/{tenant}")
+print(f"restored into tenants/{tenant} (origin tenant: {origin})")
 PYEOF
   # The restored manifest becomes the tenant's own, with its journal
   # paths rewritten into the tenant (a restored deployment must never
@@ -180,9 +194,163 @@ PYEOF
   echo "review the binds in its manifest, then: ./tenants/up.sh $tenant"
 }
 
+# ---------------------------------------------------------------------------
+# schedule — the nightly backup cron line (idempotent install)
+# ---------------------------------------------------------------------------
+SCHEDULE_MARKER="unidpp-ops: nightly backup"
+schedule_line() {
+  printf '17 3 * * * cd %s && ./unidpp-ops backup >> backups/schedule.log 2>&1 # %s' \
+    "$ROOT" "$SCHEDULE_MARKER"
+}
+
+cmd_schedule() {
+  local install="${1:-}"
+  [ "$install" = "--install" ] || [ -z "$install" ] \
+    || die "usage: schedule [--install]"
+  if [ "$install" != "--install" ]; then
+    echo "cron line (print-only; pass --install to add it to the crontab):"
+    schedule_line; echo
+    return 0
+  fi
+  local current
+  current="$(crontab -l 2>/dev/null || true)"
+  if printf '%s\n' "$current" | grep -Fq "$SCHEDULE_MARKER"; then
+    echo "schedule: already installed (marker present in the crontab)"
+    return 0
+  fi
+  { [ -z "$current" ] || printf '%s\n' "$current"; schedule_line; echo; } | crontab -
+  echo "schedule: installed (17 3 * * * nightly — see 'crontab -l')"
+}
+
+# ---------------------------------------------------------------------------
+# prune — retention, report-only by default (deletion is an explicit act)
+# ---------------------------------------------------------------------------
+cmd_prune() {
+  local keep=14 apply=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --keep) keep="$2"; shift 2 ;;
+      --keep=*) keep="${1#--keep=}"; shift ;;
+      --apply) apply=1; shift ;;
+      *) die "usage: prune [--keep N] [--apply]" ;;
+    esac
+  done
+  case "$keep" in (*[!0-9]*|"") die "--keep needs a number" ;; esac
+  local archives=() a
+  while IFS= read -r a; do archives+=("$a"); done \
+    < <(ls -1 "$BACKUPS_DIR"/*.tar.gz 2>/dev/null | sort -r)
+  local total=${#archives[@]} idx=0
+  echo "prune: $total backup(s), keeping the newest $keep"
+  for a in "${archives[@]}"; do
+    idx=$((idx + 1))
+    [ "$idx" -le "$keep" ] && continue
+    if [ -n "$apply" ]; then
+      rm -f "$a" "${a%.tar.gz}.json"
+      echo "  deleted:  $(basename "$a") (+ sidecar)"
+    else
+      echo "  candidate: $(basename "$a") (+ sidecar)"
+    fi
+  done
+  if [ "$total" -gt "$keep" ] && [ -z "$apply" ]; then
+    echo "  report-only — pass --apply to delete exactly the listed backup(s)"
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# drill — the restore rehearsal (a backup nobody ever restored is a
+# hope, not a capability). Creates and owns its drill tenant; never
+# touches production state; removes what it created unless --keep.
+# ---------------------------------------------------------------------------
+cmd_drill() {
+  local keep_tenant="${1:-}"
+  [ "$keep_tenant" = "--keep" ] || [ -z "$keep_tenant" ] \
+    || die "usage: drill [--keep]"
+  local started drill_tenant archive label
+  started="$(date -u +%s)"
+  drill_tenant="drill-$(date -u +%Y%m%dT%H%M%SZ)"
+  [ ! -e "$ROOT/tenants/$drill_tenant" ] \
+    || die "drill tenant exists: $drill_tenant (refusing to touch it)"
+  mkdir -p "$BACKUPS_DIR"
+
+  echo "drill: 1/4 backup"
+  cmd_backup drill >/dev/null
+  archive="$(ls -1t "$BACKUPS_DIR"/drill-*.tar.gz 2>/dev/null | head -1)"
+  [ -n "$archive" ] || die "drill: the backup produced no archive"
+  label="$(basename "$archive" .tar.gz)"
+
+  echo "drill: 2/4 restore into tenants/$drill_tenant"
+  cmd_restore "$archive" "$drill_tenant" >/dev/null
+
+  echo "drill: 3/4 parity + manifest validation"
+  local parity_failed=0
+  python3 - "$archive" "$ROOT/tenants/$drill_tenant" "$BACKUPS_DIR/$label.drill.json" <<'PYIN' || parity_failed=1
+import hashlib, json, sys, tarfile
+archive, target, report_path = sys.argv[1:4]
+doc = json.load(open(archive[:-len(".tar.gz")] + ".json"))
+byte_equal, checked = 0, 0
+tenant = target.rsplit("/", 1)[-1]
+origin = doc.get("tenant")
+for name, want in doc["sha256"].items():
+    parts = name.split("/")
+    if len(parts) >= 2 and parts[0] == "tenants" and parts[1] == origin:
+        parts[1] = tenant  # mirror the restore's origin-tenant rewrite
+        name = "/".join(parts)
+    out = f"{target}/{name}"
+    if name == "unidpp-operator.yaml":
+        continue  # rewritten by design (journal paths, tenant name)
+    got = hashlib.sha256(open(out, "rb").read()).hexdigest()
+    checked += 1
+    if got == want:
+        byte_equal += 1
+report = {
+    "drill": label if (label := doc.get("backup")) else "",
+    "files": len(doc["sha256"]),
+    "consistency_point": doc["consistency_point"]["log_tree_head"],
+    "checksums": "verified (restore-time)",
+    "byte_parity": f"{byte_equal}/{checked} members byte-identical after restore",
+}
+json.dump(report, open(report_path, "w"), indent=2, sort_keys=True)
+print(f"  byte parity: {byte_equal}/{checked} members identical")
+if byte_equal != checked:
+    sys.exit(1)
+PYIN
+  if [ "$parity_failed" = 1 ]; then
+    rm -rf "$ROOT/tenants/$drill_tenant"
+    die "drill failed at byte parity (report kept)"
+  fi
+  local config_bin="$ROOT/../unidpp-config/target/release/unidpp-config"
+  local manifest_ok="skipped (unidpp-config binary not built)"
+  if [ -x "$config_bin" ]; then
+    if "$config_bin" validate "$ROOT/tenants/$drill_tenant/unidpp-operator.yaml" >/dev/null 2>&1; then
+      manifest_ok="valid"
+    else
+      rm -rf "$ROOT/tenants/$drill_tenant"
+      die "drill failed: the restored manifest does not validate"
+    fi
+  fi
+  python3 - "$BACKUPS_DIR/$label.drill.json" "$manifest_ok" <<'PYIN'
+import json, sys
+doc = json.load(open(sys.argv[1]))
+doc["manifest_validated"] = sys.argv[2]
+json.dump(doc, open(sys.argv[1], "w"), indent=2, sort_keys=True)
+PYIN
+
+  echo "drill: 4/4 report"
+  if [ "$keep_tenant" != "--keep" ]; then
+    rm -rf "$ROOT/tenants/$drill_tenant"
+    echo "  drill tenant removed (pass --keep to retain it)"
+  else
+    echo "  drill tenant kept: tenants/$drill_tenant"
+  fi
+  echo "drill: GREEN in $(( $(date -u +%s) - started ))s — report: backups/$label.drill.json"
+}
+
 case "${1:-}" in
   backup)  shift; cmd_backup "${1:-}" ;;
+  schedule) shift; cmd_schedule "${1:-}" ;;
+  prune)   shift; cmd_prune "$@" ;;
+  drill)   shift; cmd_drill "${1:-}" ;;
   restore) shift; [ "${1:-}" ] && [ "${2:-}" ] || die "usage: restore <archive> <name> [--force]"; cmd_restore "$1" "$2" "${3:-}" ;;
   verify)  shift; [ "${1:-}" ] || die "usage: verify <archive>"; cmd_verify "$1" ;;
-  *) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
+  *) sed -n '2,27p' "$0" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac
