@@ -1,94 +1,99 @@
 {
- "class": "profile",
- "definition": "Critical raw materials profile: recycled-content and benchmark requirements for strategic raw materials, in particular permanent magnets, per Regulation (EU) 2024/1252",
- "effective_from": "2024-05-23T00:00:00Z",
- "item_id": "urn:unidpp:profile:crma",
- "manifest": {
-  "axes": [
-   "characteristic"
-  ],
-  "custody": {
-   "default_model": "mass_balance",
-   "standard": "ISO 22095:2020"
+  "class": "profile",
+  "definition": "Critical raw materials profile: recycled-content and benchmark requirements for strategic raw materials, in particular permanent magnets, per Regulation (EU) 2024/1252",
+  "effective_from": "2024-05-23T00:00:00Z",
+  "item_id": "urn:unidpp:profile:crma",
+  "manifest": {
+    "axes": [
+      "characteristic"
+    ],
+    "custody": {
+      "default_model": "mass_balance",
+      "standard": "ISO 22095:2020"
+    },
+    "data_points": [
+      {
+        "cardinality": "1..n",
+        "element": "de/m/crm-identity",
+        "min_capability": "S0",
+        "required_provenance": "type_declared",
+        "subject_granularity": "type",
+        "tier_a": false,
+        "traversal_depth": 1,
+        "trust_floor": "attested"
+      },
+      {
+        "cardinality": "1",
+        "element": "de/m/lot-mass",
+        "min_capability": "S0",
+        "required_provenance": "instance_measured",
+        "required_unit": "units:kg",
+        "subject_granularity": "instance",
+        "tier_a": false,
+        "traversal_depth": 2,
+        "trust_floor": "attested"
+      },
+      {
+        "cardinality": "1",
+        "element": "de/m/recycled-content-share",
+        "min_capability": "S0",
+        "required_provenance": "computed_by_transform",
+        "required_unit": "units:one",
+        "subject_granularity": "instance",
+        "tier_a": false,
+        "traversal_depth": 99,
+        "trust_floor": "log_anchored"
+      },
+      {
+        "cardinality": "1..n",
+        "element": "de/m/facility-id",
+        "min_capability": "S0",
+        "required_provenance": "attested",
+        "subject_granularity": "type",
+        "tier_a": false,
+        "traversal_depth": 2,
+        "trust_floor": "attested"
+      }
+    ],
+    "issuing_role": "manufacturer of the product containing the permanent magnet",
+    "legal_basis": [
+      {
+        "citation": "2030 benchmarks for extraction, processing and recycling; recycled-content and digital-product-passport information duties for permanent magnets (Art. 15)",
+        "force": "binding",
+        "instrument": "Regulation (EU) 2024/1252 (Critical Raw Materials Act)"
+      }
+    ],
+    "notes": "The recycled-content share is never a copied number: it is computed by the registered aggregation transform over the transformation-event graph (secondary-material inputs divided by total material inputs), under the declared custody model, with published uncertainty and a guard-banded decision rule — a boundary measurement near a quota is a legal-metrology decision (OIML competence), not a rounding accident. Traversal depth 99 with signed roll-up attestations over committed traversal sets keeps deep graphs verifiable without fetching every node.",
+    "transforms": [
+      {
+        "method_citation": "ISO 59020:2024 (measurement of circularity); mass balance over the recorded genealogy under the declared custody model",
+        "transform_class": "aggregation",
+        "transform_ref": "urn:unidpp:transform:recycled-content-mass-balance"
+      },
+      {
+        "decision_rule": "ILAC-G8 guarded acceptance at the quota boundary",
+        "method_citation": "Reg (EU) 2024/1252 thresholds",
+        "transform_class": "classification",
+        "transform_ref": "urn:unidpp:transform:quota-classification",
+        "uncertainty_ref": "units:gum-budget-mass"
+      }
+    ],
+    "triggers": [
+      {
+        "description": "product contains a strategic raw material (initial case: NdFeB or SmCo permanent magnets) above the specified thresholds, evaluated at placement",
+        "evaluation_mode": "on_event",
+        "predicate_class": "fact_predicate",
+        "predicate_ref": "pred/contains-strategic-crm"
+      }
+    ],
+    "version": "1.0.0",
+    "issuer_class": "law",
+    "issuer": "eu-competent-authority",
+    "signature": {
+      "signature": "seeded-dev-signature"
+    }
   },
-  "data_points": [
-   {
-    "cardinality": "1..n",
-    "element": "de/m/crm-identity",
-    "min_capability": "S0",
-    "required_provenance": "type_declared",
-    "subject_granularity": "type",
-    "tier_a": false,
-    "traversal_depth": 1,
-    "trust_floor": "attested"
-   },
-   {
-    "cardinality": "1",
-    "element": "de/m/lot-mass",
-    "min_capability": "S0",
-    "required_provenance": "instance_measured",
-    "required_unit": "units:kg",
-    "subject_granularity": "instance",
-    "tier_a": false,
-    "traversal_depth": 2,
-    "trust_floor": "attested"
-   },
-   {
-    "cardinality": "1",
-    "element": "de/m/recycled-content-share",
-    "min_capability": "S0",
-    "required_provenance": "computed_by_transform",
-    "required_unit": "units:one",
-    "subject_granularity": "instance",
-    "tier_a": false,
-    "traversal_depth": 99,
-    "trust_floor": "log_anchored"
-   },
-   {
-    "cardinality": "1..n",
-    "element": "de/m/facility-id",
-    "min_capability": "S0",
-    "required_provenance": "attested",
-    "subject_granularity": "type",
-    "tier_a": false,
-    "traversal_depth": 2,
-    "trust_floor": "attested"
-   }
-  ],
-  "issuing_role": "manufacturer of the product containing the permanent magnet",
-  "legal_basis": [
-   {
-    "citation": "2030 benchmarks for extraction, processing and recycling; recycled-content and digital-product-passport information duties for permanent magnets (Art. 15)",
-    "force": "binding",
-    "instrument": "Regulation (EU) 2024/1252 (Critical Raw Materials Act)"
-   }
-  ],
-  "notes": "The recycled-content share is never a copied number: it is computed by the registered aggregation transform over the transformation-event graph (secondary-material inputs divided by total material inputs), under the declared custody model, with published uncertainty and a guard-banded decision rule \u2014 a boundary measurement near a quota is a legal-metrology decision (OIML competence), not a rounding accident. Traversal depth 99 with signed roll-up attestations over committed traversal sets keeps deep graphs verifiable without fetching every node.",
-  "transforms": [
-   {
-    "method_citation": "ISO 59020:2024 (measurement of circularity); mass balance over the recorded genealogy under the declared custody model",
-    "transform_class": "aggregation",
-    "transform_ref": "urn:unidpp:transform:recycled-content-mass-balance"
-   },
-   {
-    "decision_rule": "ILAC-G8 guarded acceptance at the quota boundary",
-    "method_citation": "Reg (EU) 2024/1252 thresholds",
-    "transform_class": "classification",
-    "transform_ref": "urn:unidpp:transform:quota-classification",
-    "uncertainty_ref": "units:gum-budget-mass"
-   }
-  ],
-  "triggers": [
-   {
-    "description": "product contains a strategic raw material (initial case: NdFeB or SmCo permanent magnets) above the specified thresholds, evaluated at placement",
-    "evaluation_mode": "on_event",
-    "predicate_class": "fact_predicate",
-    "predicate_ref": "pred/contains-strategic-crm"
-   }
-  ],
+  "register_id": "unidpp-dev",
+  "submitting_organization": "ISO/TC 154 + OIML (JTC 5 liaison delegation)",
   "version": "1.0.0"
- },
- "register_id": "unidpp-dev",
- "submitting_organization": "ISO/TC 154 + OIML (JTC 5 liaison delegation)",
- "version": "1.0.0"
 }

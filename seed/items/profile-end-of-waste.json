@@ -1,117 +1,122 @@
 {
- "class": "profile",
- "definition": "End-of-waste profile: the legal state transition by which a material ceases to be waste, recorded as the issuance event of a new passport for the re-qualified material",
- "effective_from": "2026-10-01T00:00:00Z",
- "item_id": "urn:unidpp:profile:end-of-waste",
- "manifest": {
-  "axes": [
-   "characteristic"
-  ],
-  "custody": {
-   "default_model": "mass_balance",
-   "standard": "ISO 22095:2020"
+  "class": "profile",
+  "definition": "End-of-waste profile: the legal state transition by which a material ceases to be waste, recorded as the issuance event of a new passport for the re-qualified material",
+  "effective_from": "2026-10-01T00:00:00Z",
+  "item_id": "urn:unidpp:profile:end-of-waste",
+  "manifest": {
+    "axes": [
+      "characteristic"
+    ],
+    "custody": {
+      "default_model": "mass_balance",
+      "standard": "ISO 22095:2020"
+    },
+    "data_points": [
+      {
+        "cardinality": "1",
+        "element": "de/m/waste-code",
+        "min_capability": "S0",
+        "required_provenance": "attested",
+        "subject_granularity": "lot",
+        "tier_a": false,
+        "traversal_depth": 1,
+        "trust_floor": "attested"
+      },
+      {
+        "cardinality": "1",
+        "element": "de/m/eow-criteria-evidence",
+        "min_capability": "S0",
+        "required_provenance": "attested",
+        "subject_granularity": "lot",
+        "tier_a": false,
+        "traversal_depth": 1,
+        "trust_floor": "attested"
+      },
+      {
+        "cardinality": "1..n",
+        "element": "de/m/contaminant-limits",
+        "min_capability": "S0",
+        "required_provenance": "instance_measured",
+        "required_unit": "units:kg",
+        "subject_granularity": "lot",
+        "tier_a": false,
+        "traversal_depth": 1,
+        "trust_floor": "attested"
+      },
+      {
+        "cardinality": "1",
+        "element": "de/m/material-class",
+        "min_capability": "S0",
+        "required_provenance": "attested",
+        "subject_granularity": "lot",
+        "tier_a": false,
+        "traversal_depth": 1,
+        "trust_floor": "attested"
+      },
+      {
+        "cardinality": "1",
+        "element": "de/m/lot-mass",
+        "min_capability": "S0",
+        "required_provenance": "instance_measured",
+        "required_unit": "units:kg",
+        "subject_granularity": "lot",
+        "tier_a": false,
+        "traversal_depth": 1,
+        "trust_floor": "attested"
+      },
+      {
+        "cardinality": "1",
+        "element": "de/m/facility-id",
+        "min_capability": "S0",
+        "required_provenance": "attested",
+        "subject_granularity": "lot",
+        "tier_a": false,
+        "traversal_depth": 1,
+        "trust_floor": "attested"
+      }
+    ],
+    "issuing_role": "accredited actor (notified-body pattern, EN 18239 notified-actor roles); the recycler holds the waste-side record, the accredited actor issues the re-qualification",
+    "legal_basis": [
+      {
+        "citation": "Art. 6 (end-of-waste status: specified use, market or demand, technical requirements, no adverse impact), Art. 5 (by-products) as the neighbouring doctrine",
+        "force": "binding",
+        "instrument": "Directive 2008/98/EC on waste (WFD), as amended"
+      },
+      {
+        "citation": "per material stream",
+        "force": "binding",
+        "instrument": "National end-of-waste decisions and EU-level criteria where adopted"
+      }
+    ],
+    "notes": "The doctrinal point: end-of-waste is not an attribute edit on a waste record — it is NEW passport issuance (invariant I7: passports issue where legal duty attaches; the duty changes at re-qualification). The output passport is derived (R2 derivation edge, inputReferences to the waste-side passports, as-of-state hashes); waste-side inputs transition to consumed/transformed and remain verifiable for as-of queries. The demonstration implements the trigger verbatim: the end-of-waste event carries its criteria evidence reference and is issued by an accredited actor (B10). The subsequent SRM applicability binding onto the new identity is the registry's retroactive dated binding — it legally applies from the decision instant even if registered later.",
+    "transforms": [
+      {
+        "method_citation": "Basel Annexes to EU List of Waste correspondence",
+        "transform_class": "localization_mapping",
+        "transform_ref": "urn:unidpp:transform:waste-code-mapping"
+      },
+      {
+        "method_citation": "ISO 59014:2024",
+        "transform_class": "derivation",
+        "transform_ref": "urn:unidpp:transform:lot-mass-balance"
+      }
+    ],
+    "triggers": [
+      {
+        "description": "waste-status exit event with criteria met (Art. 6 conditions evidenced: use specified, demand, technical fitness, no adverse effects)",
+        "evaluation_mode": "on_event",
+        "predicate_class": "fact_predicate",
+        "predicate_ref": "pred/waste-status-exit-criteria-met"
+      }
+    ],
+    "version": "1.0.0",
+    "issuer_class": "law",
+    "issuer": "eu-competent-authority",
+    "signature": {
+      "signature": "seeded-dev-signature"
+    }
   },
-  "data_points": [
-   {
-    "cardinality": "1",
-    "element": "de/m/waste-code",
-    "min_capability": "S0",
-    "required_provenance": "attested",
-    "subject_granularity": "lot",
-    "tier_a": false,
-    "traversal_depth": 1,
-    "trust_floor": "attested"
-   },
-   {
-    "cardinality": "1",
-    "element": "de/m/eow-criteria-evidence",
-    "min_capability": "S0",
-    "required_provenance": "attested",
-    "subject_granularity": "lot",
-    "tier_a": false,
-    "traversal_depth": 1,
-    "trust_floor": "attested"
-   },
-   {
-    "cardinality": "1..n",
-    "element": "de/m/contaminant-limits",
-    "min_capability": "S0",
-    "required_provenance": "instance_measured",
-    "required_unit": "units:kg",
-    "subject_granularity": "lot",
-    "tier_a": false,
-    "traversal_depth": 1,
-    "trust_floor": "attested"
-   },
-   {
-    "cardinality": "1",
-    "element": "de/m/material-class",
-    "min_capability": "S0",
-    "required_provenance": "attested",
-    "subject_granularity": "lot",
-    "tier_a": false,
-    "traversal_depth": 1,
-    "trust_floor": "attested"
-   },
-   {
-    "cardinality": "1",
-    "element": "de/m/lot-mass",
-    "min_capability": "S0",
-    "required_provenance": "instance_measured",
-    "required_unit": "units:kg",
-    "subject_granularity": "lot",
-    "tier_a": false,
-    "traversal_depth": 1,
-    "trust_floor": "attested"
-   },
-   {
-    "cardinality": "1",
-    "element": "de/m/facility-id",
-    "min_capability": "S0",
-    "required_provenance": "attested",
-    "subject_granularity": "lot",
-    "tier_a": false,
-    "traversal_depth": 1,
-    "trust_floor": "attested"
-   }
-  ],
-  "issuing_role": "accredited actor (notified-body pattern, EN 18239 notified-actor roles); the recycler holds the waste-side record, the accredited actor issues the re-qualification",
-  "legal_basis": [
-   {
-    "citation": "Art. 6 (end-of-waste status: specified use, market or demand, technical requirements, no adverse impact), Art. 5 (by-products) as the neighbouring doctrine",
-    "force": "binding",
-    "instrument": "Directive 2008/98/EC on waste (WFD), as amended"
-   },
-   {
-    "citation": "per material stream",
-    "force": "binding",
-    "instrument": "National end-of-waste decisions and EU-level criteria where adopted"
-   }
-  ],
-  "notes": "The doctrinal point: end-of-waste is not an attribute edit on a waste record \u2014 it is NEW passport issuance (invariant I7: passports issue where legal duty attaches; the duty changes at re-qualification). The output passport is derived (R2 derivation edge, inputReferences to the waste-side passports, as-of-state hashes); waste-side inputs transition to consumed/transformed and remain verifiable for as-of queries. The demonstration implements the trigger verbatim: the end-of-waste event carries its criteria evidence reference and is issued by an accredited actor (B10). The subsequent SRM applicability binding onto the new identity is the registry's retroactive dated binding \u2014 it legally applies from the decision instant even if registered later.",
-  "transforms": [
-   {
-    "method_citation": "Basel Annexes to EU List of Waste correspondence",
-    "transform_class": "localization_mapping",
-    "transform_ref": "urn:unidpp:transform:waste-code-mapping"
-   },
-   {
-    "method_citation": "ISO 59014:2024",
-    "transform_class": "derivation",
-    "transform_ref": "urn:unidpp:transform:lot-mass-balance"
-   }
-  ],
-  "triggers": [
-   {
-    "description": "waste-status exit event with criteria met (Art. 6 conditions evidenced: use specified, demand, technical fitness, no adverse effects)",
-    "evaluation_mode": "on_event",
-    "predicate_class": "fact_predicate",
-    "predicate_ref": "pred/waste-status-exit-criteria-met"
-   }
-  ],
+  "register_id": "unidpp-dev",
+  "submitting_organization": "ISO/TC 154 + OIML (JTC 5 liaison delegation)",
   "version": "1.0.0"
- },
- "register_id": "unidpp-dev",
- "submitting_organization": "ISO/TC 154 + OIML (JTC 5 liaison delegation)",
- "version": "1.0.0"
 }

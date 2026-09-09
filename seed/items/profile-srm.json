@@ -1,148 +1,153 @@
 {
- "class": "profile",
- "definition": "Secondary raw materials profile: traceability requirements for materials re-qualified by an end-of-waste event, per ISO 59014",
- "effective_from": "2026-10-01T00:00:00Z",
- "item_id": "urn:unidpp:profile:srm",
- "manifest": {
-  "axes": [
-   "characteristic"
-  ],
-  "custody": {
-   "default_model": "mass_balance",
-   "standard": "ISO 22095:2020"
+  "class": "profile",
+  "definition": "Secondary raw materials profile: traceability requirements for materials re-qualified by an end-of-waste event, per ISO 59014",
+  "effective_from": "2026-10-01T00:00:00Z",
+  "item_id": "urn:unidpp:profile:srm",
+  "manifest": {
+    "axes": [
+      "characteristic"
+    ],
+    "custody": {
+      "default_model": "mass_balance",
+      "standard": "ISO 22095:2020"
+    },
+    "data_points": [
+      {
+        "cardinality": "1",
+        "element": "de/m/lot-id",
+        "min_capability": "S0",
+        "required_provenance": "attested",
+        "subject_granularity": "lot",
+        "tier_a": false,
+        "traversal_depth": 1,
+        "trust_floor": "attested"
+      },
+      {
+        "cardinality": "1",
+        "element": "de/m/eow-criteria-evidence",
+        "min_capability": "S0",
+        "required_provenance": "attested",
+        "subject_granularity": "lot",
+        "tier_a": false,
+        "traversal_depth": 1,
+        "trust_floor": "attested"
+      },
+      {
+        "cardinality": "1",
+        "element": "de/m/traceability-record",
+        "min_capability": "S0",
+        "required_provenance": "attested",
+        "subject_granularity": "lot",
+        "tier_a": false,
+        "traversal_depth": 1,
+        "trust_floor": "attested"
+      },
+      {
+        "cardinality": "1",
+        "element": "de/m/material-class",
+        "min_capability": "S0",
+        "required_provenance": "attested",
+        "subject_granularity": "lot",
+        "tier_a": false,
+        "traversal_depth": 1,
+        "trust_floor": "attested"
+      },
+      {
+        "cardinality": "1",
+        "element": "de/m/lot-mass",
+        "min_capability": "S0",
+        "required_provenance": "instance_measured",
+        "required_unit": "units:kg",
+        "subject_granularity": "lot",
+        "tier_a": false,
+        "traversal_depth": 1,
+        "trust_floor": "attested"
+      },
+      {
+        "cardinality": "1..n",
+        "element": "de/m/contaminant-limits",
+        "min_capability": "S0",
+        "required_provenance": "instance_measured",
+        "required_unit": "units:kg",
+        "subject_granularity": "lot",
+        "tier_a": false,
+        "traversal_depth": 1,
+        "trust_floor": "attested"
+      },
+      {
+        "cardinality": "1",
+        "element": "de/m/facility-id",
+        "min_capability": "S0",
+        "required_provenance": "attested",
+        "subject_granularity": "lot",
+        "tier_a": false,
+        "traversal_depth": 1,
+        "trust_floor": "attested"
+      },
+      {
+        "cardinality": "0..1",
+        "element": "de/m/ghg-stage",
+        "min_capability": "S0",
+        "required_provenance": "computed_by_transform",
+        "required_unit": "units:kgCO2e",
+        "subject_granularity": "lot",
+        "tier_a": false,
+        "traversal_depth": 1,
+        "trust_floor": "log_anchored"
+      }
+    ],
+    "issuing_role": "recycler, accredited for regulated claims (EN 18239 notified-actor pattern; E13 accredited_for_claims flag)",
+    "legal_basis": [
+      {
+        "citation": "Art. 6 (end-of-waste, the entry condition); Art. 3 definitions",
+        "force": "binding",
+        "instrument": "Directive 2008/98/EC on waste (WFD)"
+      },
+      {
+        "citation": "whole standard",
+        "force": "voluntary",
+        "instrument": "ISO 59014:2024 (ESG principles for traceability of recycled materials and secondary raw materials)"
+      },
+      {
+        "citation": "clause 3 definitions and principles",
+        "force": "guidance",
+        "instrument": "ISO 59004:2024 (circular economy — vocabulary, principles and guidance)"
+      },
+      {
+        "citation": "Art. 2(12) 'generation from natural resources' — the SRM profile instruments the complementary re-entry",
+        "force": "binding",
+        "instrument": "Regulation (EU) 2024/1781 (ESPR)"
+      }
+    ],
+    "notes": "ISO 59014 supplies the ESG principles for traceability of recycled materials: integrity of the recorded chain, transparency of the custody model, and segregation rules. The SRM lot's eligibility to satisfy downstream recycled-content claims (P3) is computed from this record, never asserted by a supplier letter.",
+    "transforms": [
+      {
+        "method_citation": "ISO 59014:2024",
+        "transform_class": "derivation",
+        "transform_ref": "urn:unidpp:transform:lot-mass-balance"
+      },
+      {
+        "method_citation": "ISO 14067:2018",
+        "transform_class": "aggregation",
+        "transform_ref": "urn:unidpp:transform:ghg-stage-aggregation"
+      }
+    ],
+    "triggers": [
+      {
+        "description": "subject is a material passport whose issuance event is an end-of-waste event (derivedFrom a waste-side chain)",
+        "evaluation_mode": "issuance_time",
+        "predicate_class": "fact_predicate",
+        "predicate_ref": "pred/issued-by-eow-event"
+      }
+    ],
+    "version": "1.0.0",
+    "issuer_class": "law",
+    "issuer": "ec-espr",
+    "signature": {
+      "signature": "seeded-dev-signature"
+    }
   },
-  "data_points": [
-   {
-    "cardinality": "1",
-    "element": "de/m/lot-id",
-    "min_capability": "S0",
-    "required_provenance": "attested",
-    "subject_granularity": "lot",
-    "tier_a": false,
-    "traversal_depth": 1,
-    "trust_floor": "attested"
-   },
-   {
-    "cardinality": "1",
-    "element": "de/m/eow-criteria-evidence",
-    "min_capability": "S0",
-    "required_provenance": "attested",
-    "subject_granularity": "lot",
-    "tier_a": false,
-    "traversal_depth": 1,
-    "trust_floor": "attested"
-   },
-   {
-    "cardinality": "1",
-    "element": "de/m/traceability-record",
-    "min_capability": "S0",
-    "required_provenance": "attested",
-    "subject_granularity": "lot",
-    "tier_a": false,
-    "traversal_depth": 1,
-    "trust_floor": "attested"
-   },
-   {
-    "cardinality": "1",
-    "element": "de/m/material-class",
-    "min_capability": "S0",
-    "required_provenance": "attested",
-    "subject_granularity": "lot",
-    "tier_a": false,
-    "traversal_depth": 1,
-    "trust_floor": "attested"
-   },
-   {
-    "cardinality": "1",
-    "element": "de/m/lot-mass",
-    "min_capability": "S0",
-    "required_provenance": "instance_measured",
-    "required_unit": "units:kg",
-    "subject_granularity": "lot",
-    "tier_a": false,
-    "traversal_depth": 1,
-    "trust_floor": "attested"
-   },
-   {
-    "cardinality": "1..n",
-    "element": "de/m/contaminant-limits",
-    "min_capability": "S0",
-    "required_provenance": "instance_measured",
-    "required_unit": "units:kg",
-    "subject_granularity": "lot",
-    "tier_a": false,
-    "traversal_depth": 1,
-    "trust_floor": "attested"
-   },
-   {
-    "cardinality": "1",
-    "element": "de/m/facility-id",
-    "min_capability": "S0",
-    "required_provenance": "attested",
-    "subject_granularity": "lot",
-    "tier_a": false,
-    "traversal_depth": 1,
-    "trust_floor": "attested"
-   },
-   {
-    "cardinality": "0..1",
-    "element": "de/m/ghg-stage",
-    "min_capability": "S0",
-    "required_provenance": "computed_by_transform",
-    "required_unit": "units:kgCO2e",
-    "subject_granularity": "lot",
-    "tier_a": false,
-    "traversal_depth": 1,
-    "trust_floor": "log_anchored"
-   }
-  ],
-  "issuing_role": "recycler, accredited for regulated claims (EN 18239 notified-actor pattern; E13 accredited_for_claims flag)",
-  "legal_basis": [
-   {
-    "citation": "Art. 6 (end-of-waste, the entry condition); Art. 3 definitions",
-    "force": "binding",
-    "instrument": "Directive 2008/98/EC on waste (WFD)"
-   },
-   {
-    "citation": "whole standard",
-    "force": "voluntary",
-    "instrument": "ISO 59014:2024 (ESG principles for traceability of recycled materials and secondary raw materials)"
-   },
-   {
-    "citation": "clause 3 definitions and principles",
-    "force": "guidance",
-    "instrument": "ISO 59004:2024 (circular economy \u2014 vocabulary, principles and guidance)"
-   },
-   {
-    "citation": "Art. 2(12) 'generation from natural resources' \u2014 the SRM profile instruments the complementary re-entry",
-    "force": "binding",
-    "instrument": "Regulation (EU) 2024/1781 (ESPR)"
-   }
-  ],
-  "notes": "ISO 59014 supplies the ESG principles for traceability of recycled materials: integrity of the recorded chain, transparency of the custody model, and segregation rules. The SRM lot's eligibility to satisfy downstream recycled-content claims (P3) is computed from this record, never asserted by a supplier letter.",
-  "transforms": [
-   {
-    "method_citation": "ISO 59014:2024",
-    "transform_class": "derivation",
-    "transform_ref": "urn:unidpp:transform:lot-mass-balance"
-   },
-   {
-    "method_citation": "ISO 14067:2018",
-    "transform_class": "aggregation",
-    "transform_ref": "urn:unidpp:transform:ghg-stage-aggregation"
-   }
-  ],
-  "triggers": [
-   {
-    "description": "subject is a material passport whose issuance event is an end-of-waste event (derivedFrom a waste-side chain)",
-    "evaluation_mode": "issuance_time",
-    "predicate_class": "fact_predicate",
-    "predicate_ref": "pred/issued-by-eow-event"
-   }
-  ],
+  "register_id": "unidpp-dev",
+  "submitting_organization": "ISO/TC 154 + OIML (JTC 5 liaison delegation)",
   "version": "1.0.0"
- },
- "register_id": "unidpp-dev",
- "submitting_organization": "ISO/TC 154 + OIML (JTC 5 liaison delegation)",
- "version": "1.0.0"
 }

@@ -1,37 +1,42 @@
 {
- "class": "profile",
- "definition": "EU profile set for an e-bike: Machinery Regulation / EN 15194 EPAC facts + ESPR RoHS + battery-passport duty for the LMT battery (Reg (EU) 2023/1542)",
- "effective_from": "2028-02-01T00:00:00Z",
- "item_id": "urn:unidpp:profile:eu-machinery-battery",
- "manifest": {
-  "axes": [
-   "jurisdiction"
-  ],
-  "custody": {
-   "default_model": "identity_preserved",
-   "standard": "ISO 22095:2020"
+  "class": "profile",
+  "definition": "EU profile set for an e-bike: Machinery Regulation / EN 15194 EPAC facts + ESPR RoHS + battery-passport duty for the LMT battery (Reg (EU) 2023/1542)",
+  "effective_from": "2028-02-01T00:00:00Z",
+  "item_id": "urn:unidpp:profile:eu-machinery-battery",
+  "manifest": {
+    "axes": [
+      "jurisdiction"
+    ],
+    "custody": {
+      "default_model": "identity_preserved",
+      "standard": "ISO 22095:2020"
+    },
+    "data_points": [],
+    "issuing_role": "importer (battery producer duty)",
+    "legal_basis": [
+      {
+        "citation": "Art. 77 battery passport for LMT batteries",
+        "force": "binding",
+        "instrument": "Regulation (EU) 2023/1542 (batteries)"
+      }
+    ],
+    "transforms": [],
+    "triggers": [
+      {
+        "description": "product placed on the EU market",
+        "evaluation_mode": "on_placement",
+        "predicate_class": "fact_predicate",
+        "predicate_ref": "pred/placed-on-eu-market"
+      }
+    ],
+    "version": "1.0.0",
+    "issuer_class": "law",
+    "issuer": "ec-espr",
+    "signature": {
+      "signature": "seeded-dev-signature"
+    }
   },
-  "data_points": [],
-  "issuing_role": "importer (battery producer duty)",
-  "legal_basis": [
-   {
-    "citation": "Art. 77 battery passport for LMT batteries",
-    "force": "binding",
-    "instrument": "Regulation (EU) 2023/1542 (batteries)"
-   }
-  ],
-  "transforms": [],
-  "triggers": [
-   {
-    "description": "product placed on the EU market",
-    "evaluation_mode": "on_placement",
-    "predicate_class": "fact_predicate",
-    "predicate_ref": "pred/placed-on-eu-market"
-   }
-  ],
+  "register_id": "unidpp-dev",
+  "submitting_organization": "UniDPP pilot",
   "version": "1.0.0"
- },
- "register_id": "unidpp-dev",
- "submitting_organization": "UniDPP pilot",
- "version": "1.0.0"
 }

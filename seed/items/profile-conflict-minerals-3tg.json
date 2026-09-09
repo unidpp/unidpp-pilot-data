@@ -1,112 +1,117 @@
 {
- "class": "profile",
- "definition": "Conflict-minerals profile: due-diligence declarations for tin, tantalum, tungsten and gold (3TG) per Regulation (EU) 2017/821, attaching by composition and origin facts",
- "effective_from": "2021-01-01T00:00:00Z",
- "item_id": "urn:unidpp:profile:conflict-minerals-3tg",
- "manifest": {
-  "axes": [
-   "characteristic"
-  ],
-  "custody": {
-   "default_model": "identity_preserved",
-   "note": "bag-and-tag upstream chains claim identity preservation; smelter/refiner stages claim mass balance over the documented period; the declared model is part of every claim",
-   "smelter_stage": "mass_balance",
-   "standard": "ISO 22095:2020"
+  "class": "profile",
+  "definition": "Conflict-minerals profile: due-diligence declarations for tin, tantalum, tungsten and gold (3TG) per Regulation (EU) 2017/821, attaching by composition and origin facts",
+  "effective_from": "2021-01-01T00:00:00Z",
+  "item_id": "urn:unidpp:profile:conflict-minerals-3tg",
+  "manifest": {
+    "axes": [
+      "characteristic"
+    ],
+    "custody": {
+      "default_model": "identity_preserved",
+      "note": "bag-and-tag upstream chains claim identity preservation; smelter/refiner stages claim mass balance over the documented period; the declared model is part of every claim",
+      "smelter_stage": "mass_balance",
+      "standard": "ISO 22095:2020"
+    },
+    "data_points": [
+      {
+        "cardinality": "1..n",
+        "element": "de/m/3tg-mass-fraction",
+        "min_capability": "S0",
+        "required_provenance": "instance_measured",
+        "required_unit": "units:kg",
+        "subject_granularity": "type",
+        "tier_a": false,
+        "traversal_depth": 1,
+        "trust_floor": "attested"
+      },
+      {
+        "cardinality": "1..n",
+        "element": "de/m/smelter-list",
+        "min_capability": "S0",
+        "required_provenance": "attested",
+        "subject_granularity": "instance",
+        "tier_a": false,
+        "traversal_depth": 2,
+        "trust_floor": "attested"
+      },
+      {
+        "cardinality": "1..n",
+        "element": "de/m/facility-id",
+        "min_capability": "S0",
+        "required_provenance": "attested",
+        "subject_granularity": "instance",
+        "tier_a": false,
+        "traversal_depth": 2,
+        "trust_floor": "attested"
+      },
+      {
+        "cardinality": "1..n",
+        "element": "de/m/origin-country",
+        "min_capability": "S0",
+        "required_provenance": "attested",
+        "subject_granularity": "instance",
+        "tier_a": false,
+        "traversal_depth": 2,
+        "trust_floor": "attested"
+      },
+      {
+        "cardinality": "1",
+        "element": "de/m/cahra-determination",
+        "min_capability": "S0",
+        "required_provenance": "attested",
+        "subject_granularity": "instance",
+        "tier_a": false,
+        "traversal_depth": 2,
+        "trust_floor": "attested"
+      },
+      {
+        "cardinality": "1",
+        "element": "de/m/dd-statement",
+        "min_capability": "S0",
+        "required_provenance": "attested",
+        "subject_granularity": "instance",
+        "tier_a": false,
+        "traversal_depth": 1,
+        "trust_floor": "log_anchored"
+      }
+    ],
+    "issuing_role": "importer (Union due-diligence duty holder under Reg (EU) 2017/821); smelter/refiner attestations enter as lens-scoped stamps",
+    "legal_basis": [
+      {
+        "citation": "Union importers' due-diligence obligations for 3TG; Annex I (OECD five-step framework), Annex II (CAHRA risk provisions)",
+        "force": "binding",
+        "instrument": "Regulation (EU) 2017/821 (conflict minerals)"
+      },
+      {
+        "citation": "third edition (2016), five-step framework and annex II risks",
+        "force": "guidance",
+        "instrument": "OECD Due Diligence Guidance for Responsible Supply Chains of Minerals from Conflict-Affected and High-Risk Areas"
+      },
+      {
+        "citation": "smelter/refiner conformance",
+        "force": "voluntary",
+        "instrument": "Responsible Minerals Initiative — Responsible Minerals Assurance Process (RMAP)"
+      }
+    ],
+    "notes": "The profile demonstrates cross-axial stacking: it composes with jurisdiction profiles (EU duty) on the same identity without redefining any data element. The Regulation applies from 1 January 2021; the effective_from carries that legal timing.",
+    "transforms": [],
+    "triggers": [
+      {
+        "description": "subject contains Sn, Ta, W or Au above the Regulation's mass-fraction or import-volume thresholds",
+        "evaluation_mode": "on_event",
+        "predicate_class": "fact_predicate",
+        "predicate_ref": "pred/contains-3tg-above-threshold"
+      }
+    ],
+    "version": "1.0.0",
+    "issuer_class": "law",
+    "issuer": "eu-competent-authority",
+    "signature": {
+      "signature": "seeded-dev-signature"
+    }
   },
-  "data_points": [
-   {
-    "cardinality": "1..n",
-    "element": "de/m/3tg-mass-fraction",
-    "min_capability": "S0",
-    "required_provenance": "instance_measured",
-    "required_unit": "units:kg",
-    "subject_granularity": "type",
-    "tier_a": false,
-    "traversal_depth": 1,
-    "trust_floor": "attested"
-   },
-   {
-    "cardinality": "1..n",
-    "element": "de/m/smelter-list",
-    "min_capability": "S0",
-    "required_provenance": "attested",
-    "subject_granularity": "instance",
-    "tier_a": false,
-    "traversal_depth": 2,
-    "trust_floor": "attested"
-   },
-   {
-    "cardinality": "1..n",
-    "element": "de/m/facility-id",
-    "min_capability": "S0",
-    "required_provenance": "attested",
-    "subject_granularity": "instance",
-    "tier_a": false,
-    "traversal_depth": 2,
-    "trust_floor": "attested"
-   },
-   {
-    "cardinality": "1..n",
-    "element": "de/m/origin-country",
-    "min_capability": "S0",
-    "required_provenance": "attested",
-    "subject_granularity": "instance",
-    "tier_a": false,
-    "traversal_depth": 2,
-    "trust_floor": "attested"
-   },
-   {
-    "cardinality": "1",
-    "element": "de/m/cahra-determination",
-    "min_capability": "S0",
-    "required_provenance": "attested",
-    "subject_granularity": "instance",
-    "tier_a": false,
-    "traversal_depth": 2,
-    "trust_floor": "attested"
-   },
-   {
-    "cardinality": "1",
-    "element": "de/m/dd-statement",
-    "min_capability": "S0",
-    "required_provenance": "attested",
-    "subject_granularity": "instance",
-    "tier_a": false,
-    "traversal_depth": 1,
-    "trust_floor": "log_anchored"
-   }
-  ],
-  "issuing_role": "importer (Union due-diligence duty holder under Reg (EU) 2017/821); smelter/refiner attestations enter as lens-scoped stamps",
-  "legal_basis": [
-   {
-    "citation": "Union importers' due-diligence obligations for 3TG; Annex I (OECD five-step framework), Annex II (CAHRA risk provisions)",
-    "force": "binding",
-    "instrument": "Regulation (EU) 2017/821 (conflict minerals)"
-   },
-   {
-    "citation": "third edition (2016), five-step framework and annex II risks",
-    "force": "guidance",
-    "instrument": "OECD Due Diligence Guidance for Responsible Supply Chains of Minerals from Conflict-Affected and High-Risk Areas"
-   },
-   {
-    "citation": "smelter/refiner conformance",
-    "force": "voluntary",
-    "instrument": "Responsible Minerals Initiative \u2014 Responsible Minerals Assurance Process (RMAP)"
-   }
-  ],
-  "notes": "The profile demonstrates cross-axial stacking: it composes with jurisdiction profiles (EU duty) on the same identity without redefining any data element. The Regulation applies from 1 January 2021; the effective_from carries that legal timing.",
-  "transforms": [],
-  "triggers": [
-   {
-    "description": "subject contains Sn, Ta, W or Au above the Regulation's mass-fraction or import-volume thresholds",
-    "evaluation_mode": "on_event",
-    "predicate_class": "fact_predicate",
-    "predicate_ref": "pred/contains-3tg-above-threshold"
-   }
-  ],
+  "register_id": "unidpp-dev",
+  "submitting_organization": "ISO/TC 154 + OIML (JTC 5 liaison delegation)",
   "version": "1.0.0"
- },
- "register_id": "unidpp-dev",
- "submitting_organization": "ISO/TC 154 + OIML (JTC 5 liaison delegation)",
- "version": "1.0.0"
 }

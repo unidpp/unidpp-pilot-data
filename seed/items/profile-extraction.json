@@ -1,194 +1,199 @@
 {
- "class": "profile",
- "definition": "Extraction-phase material profile: requirements attaching to an extracted lot at its commissioning at an extraction facility (mine), including mining-law conformity, royalty payment references, due diligence and voluntary certification",
- "effective_from": "2026-10-01T00:00:00Z",
- "item_id": "urn:unidpp:profile:extraction",
- "manifest": {
-  "axes": [
-   "characteristic"
-  ],
-  "custody": {
-   "default_model": "identity_preserved",
-   "standard": "ISO 22095:2020"
+  "class": "profile",
+  "definition": "Extraction-phase material profile: requirements attaching to an extracted lot at its commissioning at an extraction facility (mine), including mining-law conformity, royalty payment references, due diligence and voluntary certification",
+  "effective_from": "2026-10-01T00:00:00Z",
+  "item_id": "urn:unidpp:profile:extraction",
+  "manifest": {
+    "axes": [
+      "characteristic"
+    ],
+    "custody": {
+      "default_model": "identity_preserved",
+      "standard": "ISO 22095:2020"
+    },
+    "data_points": [
+      {
+        "cardinality": "1",
+        "element": "de/m/lot-id",
+        "min_capability": "S0",
+        "required_provenance": "attested",
+        "subject_granularity": "lot",
+        "tier_a": false,
+        "traversal_depth": 1,
+        "trust_floor": "attested"
+      },
+      {
+        "cardinality": "1",
+        "element": "de/m/material-class",
+        "min_capability": "S0",
+        "required_provenance": "type_declared",
+        "subject_granularity": "lot",
+        "tier_a": false,
+        "traversal_depth": 1,
+        "trust_floor": "self_declared"
+      },
+      {
+        "cardinality": "1",
+        "element": "de/m/facility-id",
+        "min_capability": "S0",
+        "required_provenance": "attested",
+        "subject_granularity": "lot",
+        "tier_a": false,
+        "traversal_depth": 1,
+        "trust_floor": "attested"
+      },
+      {
+        "cardinality": "1",
+        "element": "de/m/facility-class",
+        "min_capability": "S0",
+        "required_provenance": "type_declared",
+        "subject_granularity": "lot",
+        "tier_a": false,
+        "traversal_depth": 1,
+        "trust_floor": "self_declared"
+      },
+      {
+        "cardinality": "1",
+        "element": "de/m/extraction-period",
+        "min_capability": "S0",
+        "required_provenance": "type_declared",
+        "subject_granularity": "lot",
+        "tier_a": false,
+        "traversal_depth": 1,
+        "trust_floor": "self_declared"
+      },
+      {
+        "cardinality": "1",
+        "element": "de/m/lot-mass",
+        "min_capability": "S0",
+        "required_provenance": "instance_measured",
+        "required_unit": "units:kg",
+        "subject_granularity": "lot",
+        "tier_a": false,
+        "traversal_depth": 1,
+        "trust_floor": "attested"
+      },
+      {
+        "cardinality": "1..n",
+        "element": "de/m/grade",
+        "min_capability": "S0",
+        "required_provenance": "instance_measured",
+        "required_unit": "units:kg",
+        "subject_granularity": "lot",
+        "tier_a": false,
+        "traversal_depth": 1,
+        "trust_floor": "attested"
+      },
+      {
+        "cardinality": "1",
+        "element": "de/m/origin-country",
+        "min_capability": "S0",
+        "required_provenance": "type_declared",
+        "subject_granularity": "lot",
+        "tier_a": false,
+        "traversal_depth": 1,
+        "trust_floor": "self_declared"
+      },
+      {
+        "cardinality": "0..1",
+        "element": "de/m/geoloc-facility",
+        "min_capability": "S0",
+        "required_provenance": "type_declared",
+        "subject_granularity": "lot",
+        "tier_a": false,
+        "traversal_depth": 1,
+        "trust_floor": "attested",
+        "visibility": "restricted"
+      },
+      {
+        "cardinality": "1..n",
+        "element": "de/m/royalty-payment-ref",
+        "min_capability": "S0",
+        "required_provenance": "attested",
+        "subject_granularity": "lot",
+        "tier_a": false,
+        "traversal_depth": 1,
+        "trust_floor": "attested"
+      },
+      {
+        "cardinality": "0..1",
+        "element": "de/m/cert-ref",
+        "min_capability": "S0",
+        "required_provenance": "attested",
+        "subject_granularity": "lot",
+        "tier_a": false,
+        "traversal_depth": 1,
+        "trust_floor": "attested"
+      },
+      {
+        "cardinality": "1",
+        "element": "de/m/dd-statement",
+        "min_capability": "S0",
+        "required_provenance": "attested",
+        "subject_granularity": "lot",
+        "tier_a": false,
+        "traversal_depth": 1,
+        "trust_floor": "attested"
+      },
+      {
+        "cardinality": "1",
+        "element": "de/m/ghg-stage",
+        "min_capability": "S0",
+        "required_provenance": "computed_by_transform",
+        "required_unit": "units:kgCO2e",
+        "subject_granularity": "lot",
+        "tier_a": false,
+        "traversal_depth": 1,
+        "trust_floor": "log_anchored"
+      }
+    ],
+    "issuing_role": "extraction-facility operator (mining economic operator); qualified-attestor commissioning where no operator exists",
+    "legal_basis": [
+      {
+        "citation": "per jurisdiction; profile binds per registering authority",
+        "force": "binding",
+        "instrument": "National mining law of the extraction jurisdiction (concession, permit and royalty obligations)"
+      },
+      {
+        "citation": "payment and revenue disclosure for extractive operations",
+        "force": "voluntary",
+        "instrument": "EITI Standard"
+      },
+      {
+        "citation": "upstream (mine site) provisions",
+        "force": "guidance",
+        "instrument": "OECD Due Diligence Guidance for Responsible Supply Chains of Minerals from Conflict-Affected and High-Risk Areas"
+      },
+      {
+        "citation": "scheme rules",
+        "force": "voluntary",
+        "instrument": "IRMA-class certification schemes for responsible mining"
+      }
+    ],
+    "notes": "The extracted lot is the first passported node of the loop: batch passport at lot granularity (EN 18219 model/batch/item), issued where the extraction duty attaches. ISO 14040 'raw material acquisition' is the LCA stage boundary; ISO 59040 supplies the data-sheet family. Facility geolocation is visibility-restricted (precision-reduced, role-qualified) per the enumeration-resistance rules.",
+    "transforms": [
+      {
+        "method_citation": "ISO 14067:2018; ISO 14040/14044 raw-material-acquisition stage",
+        "transform_class": "aggregation",
+        "transform_ref": "urn:unidpp:transform:ghg-stage-aggregation"
+      }
+    ],
+    "triggers": [
+      {
+        "description": "lot commissioned at extraction facility",
+        "evaluation_mode": "on_event",
+        "predicate_class": "fact_predicate",
+        "predicate_ref": "pred/lot-commissioned-at-mine"
+      }
+    ],
+    "version": "1.0.0",
+    "issuer_class": "law",
+    "issuer": "eu-competent-authority",
+    "signature": {
+      "signature": "seeded-dev-signature"
+    }
   },
-  "data_points": [
-   {
-    "cardinality": "1",
-    "element": "de/m/lot-id",
-    "min_capability": "S0",
-    "required_provenance": "attested",
-    "subject_granularity": "lot",
-    "tier_a": false,
-    "traversal_depth": 1,
-    "trust_floor": "attested"
-   },
-   {
-    "cardinality": "1",
-    "element": "de/m/material-class",
-    "min_capability": "S0",
-    "required_provenance": "type_declared",
-    "subject_granularity": "lot",
-    "tier_a": false,
-    "traversal_depth": 1,
-    "trust_floor": "self_declared"
-   },
-   {
-    "cardinality": "1",
-    "element": "de/m/facility-id",
-    "min_capability": "S0",
-    "required_provenance": "attested",
-    "subject_granularity": "lot",
-    "tier_a": false,
-    "traversal_depth": 1,
-    "trust_floor": "attested"
-   },
-   {
-    "cardinality": "1",
-    "element": "de/m/facility-class",
-    "min_capability": "S0",
-    "required_provenance": "type_declared",
-    "subject_granularity": "lot",
-    "tier_a": false,
-    "traversal_depth": 1,
-    "trust_floor": "self_declared"
-   },
-   {
-    "cardinality": "1",
-    "element": "de/m/extraction-period",
-    "min_capability": "S0",
-    "required_provenance": "type_declared",
-    "subject_granularity": "lot",
-    "tier_a": false,
-    "traversal_depth": 1,
-    "trust_floor": "self_declared"
-   },
-   {
-    "cardinality": "1",
-    "element": "de/m/lot-mass",
-    "min_capability": "S0",
-    "required_provenance": "instance_measured",
-    "required_unit": "units:kg",
-    "subject_granularity": "lot",
-    "tier_a": false,
-    "traversal_depth": 1,
-    "trust_floor": "attested"
-   },
-   {
-    "cardinality": "1..n",
-    "element": "de/m/grade",
-    "min_capability": "S0",
-    "required_provenance": "instance_measured",
-    "required_unit": "units:kg",
-    "subject_granularity": "lot",
-    "tier_a": false,
-    "traversal_depth": 1,
-    "trust_floor": "attested"
-   },
-   {
-    "cardinality": "1",
-    "element": "de/m/origin-country",
-    "min_capability": "S0",
-    "required_provenance": "type_declared",
-    "subject_granularity": "lot",
-    "tier_a": false,
-    "traversal_depth": 1,
-    "trust_floor": "self_declared"
-   },
-   {
-    "cardinality": "0..1",
-    "element": "de/m/geoloc-facility",
-    "min_capability": "S0",
-    "required_provenance": "type_declared",
-    "subject_granularity": "lot",
-    "tier_a": false,
-    "traversal_depth": 1,
-    "trust_floor": "attested",
-    "visibility": "restricted"
-   },
-   {
-    "cardinality": "1..n",
-    "element": "de/m/royalty-payment-ref",
-    "min_capability": "S0",
-    "required_provenance": "attested",
-    "subject_granularity": "lot",
-    "tier_a": false,
-    "traversal_depth": 1,
-    "trust_floor": "attested"
-   },
-   {
-    "cardinality": "0..1",
-    "element": "de/m/cert-ref",
-    "min_capability": "S0",
-    "required_provenance": "attested",
-    "subject_granularity": "lot",
-    "tier_a": false,
-    "traversal_depth": 1,
-    "trust_floor": "attested"
-   },
-   {
-    "cardinality": "1",
-    "element": "de/m/dd-statement",
-    "min_capability": "S0",
-    "required_provenance": "attested",
-    "subject_granularity": "lot",
-    "tier_a": false,
-    "traversal_depth": 1,
-    "trust_floor": "attested"
-   },
-   {
-    "cardinality": "1",
-    "element": "de/m/ghg-stage",
-    "min_capability": "S0",
-    "required_provenance": "computed_by_transform",
-    "required_unit": "units:kgCO2e",
-    "subject_granularity": "lot",
-    "tier_a": false,
-    "traversal_depth": 1,
-    "trust_floor": "log_anchored"
-   }
-  ],
-  "issuing_role": "extraction-facility operator (mining economic operator); qualified-attestor commissioning where no operator exists",
-  "legal_basis": [
-   {
-    "citation": "per jurisdiction; profile binds per registering authority",
-    "force": "binding",
-    "instrument": "National mining law of the extraction jurisdiction (concession, permit and royalty obligations)"
-   },
-   {
-    "citation": "payment and revenue disclosure for extractive operations",
-    "force": "voluntary",
-    "instrument": "EITI Standard"
-   },
-   {
-    "citation": "upstream (mine site) provisions",
-    "force": "guidance",
-    "instrument": "OECD Due Diligence Guidance for Responsible Supply Chains of Minerals from Conflict-Affected and High-Risk Areas"
-   },
-   {
-    "citation": "scheme rules",
-    "force": "voluntary",
-    "instrument": "IRMA-class certification schemes for responsible mining"
-   }
-  ],
-  "notes": "The extracted lot is the first passported node of the loop: batch passport at lot granularity (EN 18219 model/batch/item), issued where the extraction duty attaches. ISO 14040 'raw material acquisition' is the LCA stage boundary; ISO 59040 supplies the data-sheet family. Facility geolocation is visibility-restricted (precision-reduced, role-qualified) per the enumeration-resistance rules.",
-  "transforms": [
-   {
-    "method_citation": "ISO 14067:2018; ISO 14040/14044 raw-material-acquisition stage",
-    "transform_class": "aggregation",
-    "transform_ref": "urn:unidpp:transform:ghg-stage-aggregation"
-   }
-  ],
-  "triggers": [
-   {
-    "description": "lot commissioned at extraction facility",
-    "evaluation_mode": "on_event",
-    "predicate_class": "fact_predicate",
-    "predicate_ref": "pred/lot-commissioned-at-mine"
-   }
-  ],
+  "register_id": "unidpp-dev",
+  "submitting_organization": "ISO/TC 154 + OIML (JTC 5 liaison delegation)",
   "version": "1.0.0"
- },
- "register_id": "unidpp-dev",
- "submitting_organization": "ISO/TC 154 + OIML (JTC 5 liaison delegation)",
- "version": "1.0.0"
 }

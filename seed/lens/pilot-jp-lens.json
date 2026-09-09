@@ -1,71 +1,112 @@
 {
- "register_id": "unidpp-dev",
- "item_id": "urn:unidpp:profile:pilot-jp-lens",
- "class": "profile",
- "definition": "Pilot JP lens on the E8 demo passport: predicate-triggered on the JP market fact, missing the top-runner-class data point (the auditable divergence), converts battery capacity kWh -> MJ through registered unit identities, and classifies the same reparability score on JP bands (projector-shaped manifest; the road-traffic duty lives in urn:unidpp:profile:jp-road-traffic)",
- "version": "1.0.0",
- "effective_from": "2026-07-01T00:00:00Z",
- "manifest": {
+  "register_id": "unidpp-dev",
+  "item_id": "urn:unidpp:profile:pilot-jp-lens",
+  "class": "profile",
+  "definition": "Pilot JP lens on the E8 demo passport: predicate-triggered on the JP market fact, missing the top-runner-class data point (the auditable divergence), converts battery capacity kWh -> MJ through registered unit identities, and classifies the same reparability score on JP bands (projector-shaped manifest; the road-traffic duty lives in urn:unidpp:profile:jp-road-traffic)",
   "version": "1.0.0",
-  "profile": {
-   "id": "urn:unidpp:profile:pilot-jp-lens",
-   "axes": { "jurisdiction": "JP", "sector": "e-mobility" },
-   "trigger": { "FactContains": { "path": "subject.markets", "needle": "JP" } },
-   "min_capability": "silent",
-   "freshness": "Static",
-   "effective": { "from": "2026-07-01T00:00:00Z" },
-   "data_points": [
-    { "register": "unidpp-dev", "item": "de.dpp.operator-id", "version": "1.0.0" },
-    { "register": "unidpp-dev", "item": "de.jp.type-approval-mark", "version": "2027.1" },
-    { "register": "unidpp-dev", "item": "de.jp.top-runner-class", "version": "2026.1" }
-   ],
-   "crypto_suites": ["ecdsa-p256"],
-   "confidential": false,
-   "resolution": "public",
-   "edge_visibility": "blind",
-   "traversal": "role-scoped"
-  },
-  "bindings": [
-   {
-    "element": "unidpp-dev/de.dpp.operator-id@1.0.0",
-    "source": "de.dpp.operator-id",
-    "min_trust": "attested",
-    "min_capability": "silent"
-   },
-   {
-    "element": "unidpp-dev/de.jp.type-approval-mark@2027.1",
-    "source": "de.jp.type-approval-mark",
-    "min_trust": "attested",
-    "min_capability": "silent"
-   },
-   {
-    "element": "unidpp-dev/de.jp.top-runner-class@2026.1",
-    "source": "de.jp.top-runner-class",
-    "min_trust": "self-declared",
-    "min_capability": "silent"
-   }
-  ],
-  "transforms": [
-   {
-    "kind": "unit-conversion",
-    "id": "capacity-mj",
-    "source": "battery.capacity-kwh",
-    "from_unit": "kWh",
-    "to_unit": "MJ",
-    "from_item": "unit-kwh",
-    "to_item": "unit-mj"
-   },
-   {
-    "kind": "classification",
-    "id": "jp-reparability-class",
-    "source": "de.dpp.reparability-score",
-    "bands": [
-     { "label": "class-1", "min": "8.5" },
-     { "label": "class-2", "min": "7.0" },
-     { "label": "class-3", "min": "5.0" },
-     { "label": "class-4", "min": "0" }
-    ]
-   }
-  ]
- }
+  "effective_from": "2026-07-01T00:00:00Z",
+  "manifest": {
+    "version": "1.0.0",
+    "profile": {
+      "id": "urn:unidpp:profile:pilot-jp-lens",
+      "axes": {
+        "jurisdiction": "JP",
+        "sector": "e-mobility"
+      },
+      "trigger": {
+        "FactContains": {
+          "path": "subject.markets",
+          "needle": "JP"
+        }
+      },
+      "min_capability": "silent",
+      "freshness": "Static",
+      "effective": {
+        "from": "2026-07-01T00:00:00Z"
+      },
+      "data_points": [
+        {
+          "register": "unidpp-dev",
+          "item": "de.dpp.operator-id",
+          "version": "1.0.0"
+        },
+        {
+          "register": "unidpp-dev",
+          "item": "de.jp.type-approval-mark",
+          "version": "2027.1"
+        },
+        {
+          "register": "unidpp-dev",
+          "item": "de.jp.top-runner-class",
+          "version": "2026.1"
+        }
+      ],
+      "crypto_suites": [
+        "ecdsa-p256"
+      ],
+      "confidential": false,
+      "resolution": "public",
+      "edge_visibility": "blind",
+      "traversal": "role-scoped"
+    },
+    "bindings": [
+      {
+        "element": "unidpp-dev/de.dpp.operator-id@1.0.0",
+        "source": "de.dpp.operator-id",
+        "min_trust": "attested",
+        "min_capability": "silent"
+      },
+      {
+        "element": "unidpp-dev/de.jp.type-approval-mark@2027.1",
+        "source": "de.jp.type-approval-mark",
+        "min_trust": "attested",
+        "min_capability": "silent"
+      },
+      {
+        "element": "unidpp-dev/de.jp.top-runner-class@2026.1",
+        "source": "de.jp.top-runner-class",
+        "min_trust": "self-declared",
+        "min_capability": "silent"
+      }
+    ],
+    "transforms": [
+      {
+        "kind": "unit-conversion",
+        "id": "capacity-mj",
+        "source": "battery.capacity-kwh",
+        "from_unit": "kWh",
+        "to_unit": "MJ",
+        "from_item": "unit-kwh",
+        "to_item": "unit-mj"
+      },
+      {
+        "kind": "classification",
+        "id": "jp-reparability-class",
+        "source": "de.dpp.reparability-score",
+        "bands": [
+          {
+            "label": "class-1",
+            "min": "8.5"
+          },
+          {
+            "label": "class-2",
+            "min": "7.0"
+          },
+          {
+            "label": "class-3",
+            "min": "5.0"
+          },
+          {
+            "label": "class-4",
+            "min": "0"
+          }
+        ]
+      }
+    ],
+    "issuer_class": "law",
+    "issuer": "jp-meti",
+    "signature": {
+      "signature": "seeded-dev-signature"
+    }
+  }
 }

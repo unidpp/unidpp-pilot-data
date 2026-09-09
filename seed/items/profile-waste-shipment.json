@@ -1,122 +1,127 @@
 {
- "class": "profile",
- "definition": "Waste-shipment profile: notification, consent and control requirements for transboundary movements of waste (Basel Convention; EU shipments framework)",
- "effective_from": "2026-05-21T00:00:00Z",
- "item_id": "urn:unidpp:profile:waste-shipment",
- "manifest": {
-  "axes": [
-   "characteristic"
-  ],
-  "custody": {
-   "default_model": "identity_preserved",
-   "note": "the consignment is the custody unit (R7 membership node); identity is preserved through the movement",
-   "standard": "ISO 22095:2020"
+  "class": "profile",
+  "definition": "Waste-shipment profile: notification, consent and control requirements for transboundary movements of waste (Basel Convention; EU shipments framework)",
+  "effective_from": "2026-05-21T00:00:00Z",
+  "item_id": "urn:unidpp:profile:waste-shipment",
+  "manifest": {
+    "axes": [
+      "characteristic"
+    ],
+    "custody": {
+      "default_model": "identity_preserved",
+      "note": "the consignment is the custody unit (R7 membership node); identity is preserved through the movement",
+      "standard": "ISO 22095:2020"
+    },
+    "data_points": [
+      {
+        "cardinality": "1..n",
+        "element": "de/m/waste-code",
+        "min_capability": "S0",
+        "required_provenance": "attested",
+        "subject_granularity": "lot",
+        "tier_a": false,
+        "traversal_depth": 1,
+        "trust_floor": "attested"
+      },
+      {
+        "cardinality": "1",
+        "element": "de/m/recovery-code",
+        "min_capability": "S0",
+        "required_provenance": "attested",
+        "subject_granularity": "lot",
+        "tier_a": false,
+        "traversal_depth": 1,
+        "trust_floor": "attested"
+      },
+      {
+        "cardinality": "1..n",
+        "element": "de/m/movement-consent-ref",
+        "min_capability": "S0",
+        "required_provenance": "attested",
+        "subject_granularity": "lot",
+        "tier_a": false,
+        "traversal_depth": 1,
+        "trust_floor": "log_anchored"
+      },
+      {
+        "cardinality": "2..n",
+        "element": "de/m/facility-id",
+        "min_capability": "S0",
+        "required_provenance": "attested",
+        "subject_granularity": "lot",
+        "tier_a": false,
+        "traversal_depth": 1,
+        "trust_floor": "attested"
+      },
+      {
+        "cardinality": "2..n",
+        "element": "de/m/facility-class",
+        "min_capability": "S0",
+        "required_provenance": "type_declared",
+        "subject_granularity": "lot",
+        "tier_a": false,
+        "traversal_depth": 1,
+        "trust_floor": "self_declared"
+      },
+      {
+        "cardinality": "1",
+        "element": "de/m/lot-mass",
+        "min_capability": "S0",
+        "required_provenance": "instance_measured",
+        "required_unit": "units:kg",
+        "subject_granularity": "lot",
+        "tier_a": false,
+        "traversal_depth": 1,
+        "trust_floor": "attested"
+      }
+    ],
+    "issuing_role": "notifier (waste holder, producer or facility of origin); competent-authority consents enter as stamps",
+    "legal_basis": [
+      {
+        "citation": "prior informed consent; Annexes I–IX listings",
+        "force": "binding",
+        "instrument": "Basel Convention on the Control of Transboundary Movements of Hazardous Wastes and Their Disposal"
+      },
+      {
+        "citation": "notification, consent and supervision procedures",
+        "force": "superseded",
+        "instrument": "Regulation (EC) No 1013/2006 on shipments of waste (as in force until 2026-05-20)"
+      },
+      {
+        "citation": "notification, consent, digitalised procedures and inspection requirements",
+        "force": "binding",
+        "instrument": "Regulation (EU) 2024/1157 on shipments of waste (applies from 2026-05-21)"
+      },
+      {
+        "citation": "revised OECD control system",
+        "force": "binding",
+        "instrument": "OECD Council Decision on the control of transboundary movements of wastes destined for recovery operations"
+      }
+    ],
+    "notes": "The movement is an event on the waste-side passport chain, never a document parallel to it: the notification and consent references ride the custody event, so the border authority's verification (Tier-A offline minimum with pinned anchors) and the end-of-waste assessor's later reconstruction read the same record. The 2026-05-21 effective_from tracks Regulation (EU) 2024/1157's application date; the supersession of the 1013/2006 legal-basis entry is expressed by force class, not by rewriting the profile.",
+    "transforms": [
+      {
+        "method_citation": "Basel Annexes to EU List of Waste correspondence",
+        "transform_class": "localization_mapping",
+        "transform_ref": "urn:unidpp:transform:waste-code-mapping"
+      }
+    ],
+    "triggers": [
+      {
+        "description": "subject in waste status enters a cross-border movement event (custody.transfer with jurisdiction change; export, import or transit)",
+        "evaluation_mode": "on_event",
+        "predicate_class": "fact_predicate",
+        "predicate_ref": "pred/waste-cross-border-movement"
+      }
+    ],
+    "version": "1.0.0",
+    "issuer_class": "law",
+    "issuer": "ec-espr",
+    "signature": {
+      "signature": "seeded-dev-signature"
+    }
   },
-  "data_points": [
-   {
-    "cardinality": "1..n",
-    "element": "de/m/waste-code",
-    "min_capability": "S0",
-    "required_provenance": "attested",
-    "subject_granularity": "lot",
-    "tier_a": false,
-    "traversal_depth": 1,
-    "trust_floor": "attested"
-   },
-   {
-    "cardinality": "1",
-    "element": "de/m/recovery-code",
-    "min_capability": "S0",
-    "required_provenance": "attested",
-    "subject_granularity": "lot",
-    "tier_a": false,
-    "traversal_depth": 1,
-    "trust_floor": "attested"
-   },
-   {
-    "cardinality": "1..n",
-    "element": "de/m/movement-consent-ref",
-    "min_capability": "S0",
-    "required_provenance": "attested",
-    "subject_granularity": "lot",
-    "tier_a": false,
-    "traversal_depth": 1,
-    "trust_floor": "log_anchored"
-   },
-   {
-    "cardinality": "2..n",
-    "element": "de/m/facility-id",
-    "min_capability": "S0",
-    "required_provenance": "attested",
-    "subject_granularity": "lot",
-    "tier_a": false,
-    "traversal_depth": 1,
-    "trust_floor": "attested"
-   },
-   {
-    "cardinality": "2..n",
-    "element": "de/m/facility-class",
-    "min_capability": "S0",
-    "required_provenance": "type_declared",
-    "subject_granularity": "lot",
-    "tier_a": false,
-    "traversal_depth": 1,
-    "trust_floor": "self_declared"
-   },
-   {
-    "cardinality": "1",
-    "element": "de/m/lot-mass",
-    "min_capability": "S0",
-    "required_provenance": "instance_measured",
-    "required_unit": "units:kg",
-    "subject_granularity": "lot",
-    "tier_a": false,
-    "traversal_depth": 1,
-    "trust_floor": "attested"
-   }
-  ],
-  "issuing_role": "notifier (waste holder, producer or facility of origin); competent-authority consents enter as stamps",
-  "legal_basis": [
-   {
-    "citation": "prior informed consent; Annexes I\u2013IX listings",
-    "force": "binding",
-    "instrument": "Basel Convention on the Control of Transboundary Movements of Hazardous Wastes and Their Disposal"
-   },
-   {
-    "citation": "notification, consent and supervision procedures",
-    "force": "superseded",
-    "instrument": "Regulation (EC) No 1013/2006 on shipments of waste (as in force until 2026-05-20)"
-   },
-   {
-    "citation": "notification, consent, digitalised procedures and inspection requirements",
-    "force": "binding",
-    "instrument": "Regulation (EU) 2024/1157 on shipments of waste (applies from 2026-05-21)"
-   },
-   {
-    "citation": "revised OECD control system",
-    "force": "binding",
-    "instrument": "OECD Council Decision on the control of transboundary movements of wastes destined for recovery operations"
-   }
-  ],
-  "notes": "The movement is an event on the waste-side passport chain, never a document parallel to it: the notification and consent references ride the custody event, so the border authority's verification (Tier-A offline minimum with pinned anchors) and the end-of-waste assessor's later reconstruction read the same record. The 2026-05-21 effective_from tracks Regulation (EU) 2024/1157's application date; the supersession of the 1013/2006 legal-basis entry is expressed by force class, not by rewriting the profile.",
-  "transforms": [
-   {
-    "method_citation": "Basel Annexes to EU List of Waste correspondence",
-    "transform_class": "localization_mapping",
-    "transform_ref": "urn:unidpp:transform:waste-code-mapping"
-   }
-  ],
-  "triggers": [
-   {
-    "description": "subject in waste status enters a cross-border movement event (custody.transfer with jurisdiction change; export, import or transit)",
-    "evaluation_mode": "on_event",
-    "predicate_class": "fact_predicate",
-    "predicate_ref": "pred/waste-cross-border-movement"
-   }
-  ],
+  "register_id": "unidpp-dev",
+  "submitting_organization": "ISO/TC 154 + OIML (JTC 5 liaison delegation)",
   "version": "1.0.0"
- },
- "register_id": "unidpp-dev",
- "submitting_organization": "ISO/TC 154 + OIML (JTC 5 liaison delegation)",
- "version": "1.0.0"
 }
