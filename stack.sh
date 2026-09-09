@@ -307,11 +307,16 @@ cmd_status() {
     local name rest repo port
     name="${spec%%:*}"; rest="${spec#*:}"; repo="${rest%%:*}"; port="${rest##*:}"
     if is_ours "$port" "$repo"; then
-      local ver
-      ver="$(curl -sf -m 2 "http://127.0.0.1:$port/" 2>/dev/null | jq -r '.version // empty' 2>/dev/null)"
+      # The version: the well-known identity first (cheap JSON, what
+      # the console serves; other services fall through to their
+      # discovery doc). Every probe guarded — status reports, it does
+      # not die on a slow dashboard render.
+      local ver=""
+      ver="$(curl -sf -m 2 "http://127.0.0.1:$port/.well-known/unidpp-service" 2>/dev/null | jq -r '.version // empty' 2>/dev/null || true)"
       [[ -z "$ver" ]] \
-        && ver="$(curl -sf -m 2 "http://127.0.0.1:$port/.well-known/unidpp-service" 2>/dev/null | jq -r '.version // empty' 2>/dev/null)"
-      printf '  %-10s %-18s http://127.0.0.1:%s  healthy  v%s\n' "$name" "($repo)" "$port" "${ver:-?}"
+        && ver="$(curl -sf -m 2 "http://127.0.0.1:$port/" 2>/dev/null | jq -r '.version // empty' 2>/dev/null || true)"
+      ver="${ver:-?}"
+      printf '  %-10s %-18s http://127.0.0.1:%s  healthy  v%s\n' "$name" "($repo)" "$port" "$ver"
     elif port_taken "$port"; then
       printf '  %-10s %-18s http://127.0.0.1:%s  HELD BY %s\n' "$name" "($repo)" "$port" "$(service_id "$port" || echo '?')"
       failed=1
