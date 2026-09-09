@@ -80,7 +80,8 @@ cmd_backup() {
   [ -f "$ROOT/jp-registry-journal.jsonl" ] && files+=("jp-registry-journal.jsonl")
   while IFS= read -r journal; do files+=("${journal#"$ROOT"/}"); done \
     < <(find "$ROOT/run" "$ROOT/tenants" \
-         \( -name '*-journal.jsonl' -o -name 'unidpp-operator.yaml' \) 2>/dev/null)
+         \( -name '*-journal.jsonl' -o -name 'unidpp-operator.yaml' \
+            -o -name '*.sh' \) 2>/dev/null)
   while IFS= read -r seed; do files+=("${seed#"$ROOT"/}"); done \
     < <(find "$ROOT/seed" -type f 2>/dev/null)
   [ "${#files[@]}" -ge 1 ] || die "nothing to back up (no manifest?)"
