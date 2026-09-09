@@ -7,6 +7,9 @@
 #   ./unidpp-ops verify <archive>      # checksums only
 #   ./unidpp-ops schedule [--install]  # the nightly backup cron line
 #                                      #  (--install merges it idempotently)
+#   ./unidpp-ops schedule --watch --install
+#                                      # the always-on watch: */10 the
+#                                      #  idempotent repair (stack start)
 #   ./unidpp-ops prune [--keep N] [--apply]
 #                                      # retention: LIST backups beyond the
 #                                      #  newest N (report-only unless --apply)
@@ -213,19 +216,44 @@ PYEOF
 # schedule — the nightly backup cron line (idempotent install)
 # ---------------------------------------------------------------------------
 SCHEDULE_MARKER="unidpp-ops: nightly backup"
+WATCH_MARKER="unidpp-ops: always-on watch"
 schedule_line() {
   printf '17 3 * * * cd %s && ./unidpp-ops backup >> backups/schedule.log 2>&1 # %s' \
     "$ROOT" "$SCHEDULE_MARKER"
 }
 
 cmd_schedule() {
-  local install="${1:-}"
+  local install="${1:-}" watch="${2:-}"
+  if [ "$install" = "--watch" ]; then
+    # The always-on watch: the idempotent repair every ten minutes
+    # (dead services restart, journals replay; healthy ones untouched).
+    if [ "$watch" = "--install" ]; then
+      local current
+      current="$(crontab -l 2>/dev/null || true)"
+      if printf '%s\n' "$current" | grep -Fq "$WATCH_MARKER"; then
+        echo "watch: already installed (marker present)"
+        return 0
+      fi
+      { [ -z "$current" ] || printf '%s\n' "$current"
+        printf '*/10 * * * * cd %s && ./stack.sh start >/dev/null 2>&1 # %s\n' "$ROOT" "$WATCH_MARKER"; } | crontab -
+      echo "watch: installed (*/10 — the idempotent repair)"
+      echo "  removal: crontab -l | grep -v 'unidpp-ops: always-on watch' | crontab -"
+      return 0
+    fi
+    die "usage: schedule --watch --install"
+  fi
   if [ "$install" = "--status" ]; then
-    if printf '%s\n' "$(crontab -l 2>/dev/null || true)" \
-      | grep -Fq "$SCHEDULE_MARKER"; then
-      echo "installed: the nightly backup runs at 03:17 (crontab -l)"
+    local crontab_text
+    crontab_text="$(crontab -l 2>/dev/null || true)"
+    if printf '%s\n' "$crontab_text" | grep -Fq "$SCHEDULE_MARKER"; then
+      echo "backup: installed (nightly at 03:17)"
     else
-      echo "not installed — pass --install to add the nightly backup cron"
+      echo "backup: not installed — pass --install"
+    fi
+    if printf '%s\n' "$crontab_text" | grep -Fq "$WATCH_MARKER"; then
+      echo "watch:  installed (the */10 idempotent repair)"
+    else
+      echo "watch:  not installed — pass --watch --install"
     fi
     return 0
   fi
@@ -775,7 +803,7 @@ cmd_decommission() {
 
 case "${1:-}" in
   backup)  shift; cmd_backup "${1:-}" ;;
-  schedule) shift; cmd_schedule "${1:-}" ;;
+  schedule) shift; cmd_schedule "$@" ;;
   prune)   shift; cmd_prune "$@" ;;
   drill)   shift; cmd_drill "${1:-}" ;;
   bundle)  shift; [ "${1:-}" ] || die "usage: bundle <tenant> [--data-only] [--out dir]"; cmd_bundle "$@" ;;

@@ -103,6 +103,18 @@ jobs:
         run: ./unidpp-ops drill
       - name: 'The recover drill (original shape)'
         run: ./unidpp-ops drill --recover
+      - name: 'The tenant runner: whitelabel up, healthy, down'
+        run: |
+          set -eu
+          cp="$(printf '%s\n' tenants/acme-cn/*-journal.jsonl | sort | head -1)"
+          before="$(sha256sum "$cp" | cut -d' ' -f1)"
+          ./tenants/up.sh acme-cn start
+          ./tenants/up.sh acme-cn status | grep -c running
+          curl -sf -m 5 http://127.0.0.1:9590/healthz
+          curl -sf -m 5 http://127.0.0.1:9593/healthz
+          ./tenants/up.sh acme-cn stop
+          after="$(sha256sum "$cp" | cut -d' ' -f1)"
+          [ "$before" = "$after" ] && echo "tenant journals append-only across the cycle"
       - name: 'The data-only bundle restores as a tenant'
         run: |
           set -eu
