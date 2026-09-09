@@ -456,8 +456,64 @@ cmd_bundle() {
       cp "$bin" "$stage/$tenant/bin/"
     done < <("$config_cli" services "$manifest")
     cp "$config_cli" "$stage/$tenant/bin/"
-    cp "$ROOT/tenants/up.sh" "$stage/$tenant/"
     cp "$ROOT/unidpp-ops" "$stage/$tenant/"
+    # The bundle's own runner: manifest at the bundle root, binaries
+    # from ./bin — self-contained by construction (the pilot's up.sh
+    # resolves the family checkout; wrong layout for a bundle).
+    cat > "$stage/$tenant/run.sh" <<'RUNSH'
+#!/usr/bin/env bash
+# run.sh — the bundle's own runner (start|stop|status).
+# The manifest is ./unidpp-operator.yaml; every binary comes from
+# ./bin; pidfiles and logs live under ./run.
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+CONFIG="$HERE/bin/unidpp-config"
+MANIFEST="$HERE/unidpp-operator.yaml"
+ACTION="${1:-start}"
+mkdir -p "$HERE/run"
+
+case "$ACTION" in
+  start) ;;
+  stop) ;;
+  status) ;;
+  *) echo "usage: ./run.sh [start|stop|status]" >&2; exit 2 ;;
+esac
+
+[ -x "$CONFIG" ] || { echo "run.sh: no unidpp-config in ./bin" >&2; exit 1; }
+
+for name in $("$CONFIG" services "$MANIFEST"); do
+  binary="$HERE/bin/unidpp-$name"
+  pidfile="$HERE/run/$name.pid"
+  if [ "$ACTION" = stop ]; then
+    if [ -f "$pidfile" ] && kill "$(cat "$pidfile")" 2>/dev/null; then
+      echo "stopped $name"
+    else
+      echo "$name not running"
+    fi
+    continue
+  fi
+  if [ "$ACTION" = status ]; then
+    if [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then
+      echo "  $name: running (pid $(cat "$pidfile"))"
+    else
+      echo "  $name: down"
+    fi
+    continue
+  fi
+  if [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then
+    echo "  $name: already running"
+    continue
+  fi
+  [ -x "$binary" ] || { echo "run.sh: no binary for $name at $binary" >&2; exit 1; }
+  # shellcheck disable=SC2046
+  env $( "$CONFIG" render-env "$name" "$MANIFEST" ) \
+    ${name:+$([ "$name" = console ] && printf 'UNIDPP_CONSOLE_MANIFEST=%s ' "$MANIFEST")} \
+    nohup "$binary" > "$HERE/run/$name.log" 2>&1 &
+  echo $! > "$pidfile"
+  echo "  $name: started (pid $(cat "$pidfile"))"
+done
+RUNSH
+    chmod +x "$stage/$tenant/run.sh"
   fi
 
   # First-boot env template: every ${VAR} the manifest references.
@@ -472,9 +528,10 @@ the data; the binaries are the engine. Produced $(date -u +%Y-%m-%dT%H:%M:%SZ)Z.
 
 ## First boot
 
-    ./unidpp-config validate unidpp-operator.yaml   # always validate first
-    cp .env.template .env                           # fill every \${VAR}
-    ./up.sh $tenant start                           # render-env + services
+    ./bin/unidpp-config validate unidpp-operator.yaml   # always validate first
+    cp .env.template .env                               # fill every \${VAR}
+    ./run.sh start                                      # render-env + ./bin binaries
+    ./run.sh status
 
 Ports, state files, suites, sovereignty rules: read them from the
 manifest — the runner and the services take everything from it.

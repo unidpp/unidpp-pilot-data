@@ -123,6 +123,25 @@ jobs:
           ./unidpp-ops verify "$data"
           ./unidpp-ops restore "$data" acme-cn-moved
           ../unidpp-config/target/release/unidpp-config validate tenants/acme-cn-moved/unidpp-operator.yaml
+      - name: 'The bundle first-boots from its own contents'
+        run: |
+          set -eu
+          mkdir -p tenants/scratch-fw
+          sed -e 's/name: acme-cn/name: scratch-fw/' -e 's/9590/9690/' \
+              -e 's/9593/9693/' -e 's/9589/9689/' \
+              tenants/acme-cn/unidpp-operator.yaml > tenants/scratch-fw/unidpp-operator.yaml
+          ./unidpp-ops bundle scratch-fw
+          fb="$(printf '%s\n' backups/scratch-fw-bundle-*.tar.gz | sort -r | head -1)"
+          ./unidpp-ops verify "$fb"
+          tmp="$(mktemp -d)"
+          tar -xzf "$fb" -C "$tmp"
+          "$tmp/scratch-fw/run.sh" start
+          sleep 3
+          curl -sf -m 5 http://127.0.0.1:9690/healthz
+          curl -sf -m 5 http://127.0.0.1:9693/healthz
+          "$tmp/scratch-fw/run.sh" status | grep -c running
+          "$tmp/scratch-fw/run.sh" stop
+          rm -rf "$tmp" tenants/scratch-fw
       - name: The bundle
         run: |
           set -eu
