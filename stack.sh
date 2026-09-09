@@ -307,7 +307,11 @@ cmd_status() {
     local name rest repo port
     name="${spec%%:*}"; rest="${spec#*:}"; repo="${rest%%:*}"; port="${rest##*:}"
     if is_ours "$port" "$repo"; then
-      printf '  %-10s %-18s http://127.0.0.1:%s  healthy\n' "$name" "($repo)" "$port"
+      local ver
+      ver="$(curl -sf -m 2 "http://127.0.0.1:$port/" 2>/dev/null | jq -r '.version // empty' 2>/dev/null)"
+      [[ -z "$ver" ]] \
+        && ver="$(curl -sf -m 2 "http://127.0.0.1:$port/.well-known/unidpp-service" 2>/dev/null | jq -r '.version // empty' 2>/dev/null)"
+      printf '  %-10s %-18s http://127.0.0.1:%s  healthy  v%s\n' "$name" "($repo)" "$port" "${ver:-?}"
     elif port_taken "$port"; then
       printf '  %-10s %-18s http://127.0.0.1:%s  HELD BY %s\n' "$name" "($repo)" "$port" "$(service_id "$port" || echo '?')"
       failed=1

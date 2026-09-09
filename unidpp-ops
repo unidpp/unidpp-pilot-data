@@ -500,7 +500,7 @@ svc_bind() { # svc_bind <service> — from the manifest's rendered env
   rendered="$("$ROOT/../unidpp-config/target/release/unidpp-config" \
     render-env "$1" "$ROOT/unidpp-operator.yaml" 2>/dev/null \
     | grep -E '^UNIDPP_[A-Z_]*BIND=' | head -1)" || true
-  printf '%s' "${rendered#*=}"
+  printf '%s' "${rendered#*=}" | awk -F: '{print $2}'
 }
 
 # Domain readings (what the state IS, not just file sizes) + journal
@@ -518,9 +518,17 @@ def get(path):
     except Exception:
         return None
 readings = {}
+def identity(port):
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=3) as r:
+            d = json.load(r)
+        return f"{d.get('version', '?')}+{d.get('build_id', '?')}"
+    except Exception:
+        return None
+readings["build_identity"] = {n: identity(p) for n, p in ports.items()}
 if "registry" in ports:
-    doc = get(f"{ports['registry']}/items")
-    readings["registry_items"] = len(doc["items"]) if doc else None
+    doc = get(f"{ports['registry']}/items?limit=1")
+    readings["registry_items"] = doc.get("count") if doc else None
 if "trust" in ports:
     doc = get(f"{ports['trust']}/revocations")
     readings["trust_revocations"] = len(doc["revocations"]) if doc else None
@@ -586,6 +594,9 @@ archive, before_p, after_p, report_p, root = sys.argv[1:6]
 before = json.load(open(before_p))
 after = json.load(open(after_p))
 domain_equal = all(before[k] == after[k] for k in ("registry_items", "trust_revocations", "log_tree_size") if before.get(k) is not None)
+# The build identity is recorded (what the swap actually served), not
+# compared — a version change is the POINT of an upgrade.
+identity_note = {n: {"before": before["build_identity"].get(n), "after": after["build_identity"].get(n)} for n in before["build_identity"]}
 journal_equal = before["journal_lines"] == after["journal_lines"]
 # Append-only proof: every journal the backup captured is a byte
 # prefix of the live journal (the upgrade rewrote nothing).
@@ -606,6 +617,7 @@ report = {
     "journal_lines_equal": journal_equal,
     "append_only": f"{prefix_ok}/{prefix_total} backup journals are live-prefix-compatible",
     "before": before, "after": after,
+    "build_identity": identity_note,
     "result": "GREEN" if ok else "FAILED",
 }
 json.dump(report, open(report_p, "w"), indent=2, sort_keys=True)
