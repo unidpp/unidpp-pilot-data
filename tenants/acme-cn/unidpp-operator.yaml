@@ -4,6 +4,7 @@ deployment:
   profile: sovereign
   base_url: https://dpp.acme.cn.example.org
 branding:
+  locale: zh-CN
   organization: ACME 华动
   product_name: ACME 产品数字护照
   theme:
