@@ -231,8 +231,13 @@ anchor="$(json_get "$DEMO_DIR/04-issuer-keyring.json" 'doc["roles"]["pack"]["pub
 say "pack: $(json_get "$DEMO_DIR/03-tier-a-pack.json" 'doc["bytes"]') bytes, QR v$(json_get "$DEMO_DIR/03-tier-a-pack.json" 'doc["qr_version"]'), anchor ${anchor:0:16}… (ECDSA-P256)"
 rm -f "$DEMO_DIR/04-issuer-keyring.json.candidate"
 
+# Verify under archival semantics: the demo passport's last event
+# sets the pack's content as-of stamp, so the seed is idempotent
+# across time — a pack minted on day one verifies PASS on day five
+# hundred as a document (static semantics, never stale). Freshness
+# semantics are exercised by the e2e demo's pinned as-of moments.
 set +e
-verify_out="$("$UNIDPP_CLI" verify "$DEMO_DIR/pack.hex" --anchor "$anchor" --json 2>"$DEMO_DIR/.verify.stderr")"
+verify_out="$("$UNIDPP_CLI" verify "$DEMO_DIR/pack.hex" --anchor "$anchor" --max-age 0 --json 2>"$DEMO_DIR/.verify.stderr")"
 verify_code=$?
 set -e
 python3 - "$verify_code" "$verify_out" > "$DEMO_DIR/05-cli-verify.json" <<'PYEOF'
