@@ -19,6 +19,7 @@
 #   8395  unidpp-gateway    the interop gateway: UNTP + EN 18222
 #                           renders (UNIDPP_ISSUER_URL -> 8393)
 #   8396  unidpp-archive    the Tier-C notarized snapshot service
+#   8397  unidpp-hub        the translation hub (stateless signed relay)
 #                           (UNIDPP_LOG_URL -> 8392)
 #   8397  (reserved)
 #   8399  unidpp-registry (JP)  the JP national peer node: the same
@@ -249,6 +250,15 @@ cmd_start() {
     UNIDPP_ARCHIVE_SNAPSHOT_DIR="$RUN_DIR/archive-snapshots" \
     UNIDPP_LOG_URL=http://127.0.0.1:8392
 
+  # The translation hub: stateless — no journal, no state file; a
+  # pinned seed keeps the relay-signing key stable across restarts
+  # (a fixed constant keeps the reference deployment reproducible,
+  # the demo's ceremony-seed convention).
+  start_service hub unidpp-hub 8397 60 \
+    UNIDPP_HUB_BIND=127.0.0.1:8397 \
+    UNIDPP_HUB_ID=unidpp-hub-pilot \
+    UNIDPP_HUB_SEED=pilot-hub-relay-seed
+
   # The admin console: the operator manifest as its configuration.
   start_service console unidpp-console 8389 60 \
     UNIDPP_CONSOLE_BIND=127.0.0.1:8389 \
@@ -270,13 +280,14 @@ cmd_start() {
   echo
   echo "==> stack up: 8390 registry · 8391 trust · 8392 log · 8393 issuer"
   echo "               8394 projector · 8395 gateway · 8396 archive"
+  echo "               8397 hub (stateless relay)"
   echo "==> next: ./seed-pilot.sh   (idempotent: seed + demo artifacts)"
 }
 
 # ---------------------------------------------------------------------------
 cmd_stop() {
   local name pid
-  for name in console archive gateway projector issuer log trust registry jp-registry tunnel jp-tunnel console-tunnel; do
+  for name in console archive hub gateway projector issuer log trust registry jp-registry tunnel jp-tunnel console-tunnel; do
     local pidfile="$RUN_DIR/$name.pid"
     if [[ -f "$pidfile" ]]; then
       pid="$(cat "$pidfile")"
@@ -302,6 +313,7 @@ cmd_status() {
     "projector:unidpp-projector:8394" \
     "gateway:unidpp-gateway:8395" \
     "archive:unidpp-archive:8396" \
+    "hub:unidpp-hub:8397" \
     "console:unidpp-console:8389" \
     "jp-registry:unidpp-registry:8399"; do
     local name rest repo port
