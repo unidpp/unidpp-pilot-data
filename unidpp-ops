@@ -620,6 +620,9 @@ if "trust" in ports:
 if "log" in ports:
     doc = get(f"{ports['log']}/tree/head")
     readings["log_tree_size"] = doc["tree_size"] if doc else None
+if "resolver" in ports:
+    doc = get(f"{ports['resolver']}/linksets?limit=1")
+    readings["resolver_linksets"] = doc.get("count") if doc else None
 lines = {}
 for rel in ["registry-journal.jsonl", "jp-registry-journal.jsonl"]:
     p = os.path.join(root, rel)
@@ -643,10 +646,15 @@ cmd_rehearse() {
   local label="upgrade-$(date -u +%Y%m%dT%H%M%SZ)"
   local started="$(date -u +%s)"
 
+  local config_cli_services
+  config_cli_services="$("$ROOT/../unidpp-config/target/release/unidpp-config" \
+    services "$ROOT/unidpp-operator.yaml")" \
+    || die "cannot enumerate the declared services"
   local binds="" svc
-  for svc in registry trust log issuer; do
+  while IFS= read -r svc; do
+    [ -n "$svc" ] || continue
     binds="${binds:+$binds,}$svc=$(svc_bind "$svc")"
-  done
+  done <<< "$config_cli_services"
 
   echo "rehearse: 1/5 backup"
   cmd_backup upgrade >/dev/null
@@ -658,12 +666,13 @@ cmd_rehearse() {
   rehearse_readings "$binds" > "$BACKUPS_DIR/$label.before.json"
 
   echo "rehearse: 3/5 rebuild (the binary swap)"
-  local repo
-  for repo in unidpp-registry unidpp-trust unidpp-log unidpp-issuer \
-              unidpp-projector unidpp-gateway unidpp-archive unidpp-console; do
+  local repo svc
+  while IFS= read -r svc; do
+    [ -n "$svc" ] || continue
+    repo="unidpp-$svc"
     (cd "$ROOT/../$repo" && cargo build --release >/dev/null 2>&1) \
       || die "rehearse: rebuild failed: $repo"
-  done
+  done <<< "$config_cli_services"
 
   echo "rehearse: 4/5 restart (journals replay on the new binaries)"
   "$ROOT/stack.sh" stop >/dev/null
