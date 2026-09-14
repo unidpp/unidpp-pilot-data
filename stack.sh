@@ -250,14 +250,11 @@ cmd_start() {
     UNIDPP_ARCHIVE_SNAPSHOT_DIR="$RUN_DIR/archive-snapshots" \
     UNIDPP_LOG_URL=http://127.0.0.1:8392
 
-  # The translation hub: stateless — no journal, no state file; a
-  # pinned seed keeps the relay-signing key stable across restarts
-  # (a fixed constant keeps the reference deployment reproducible,
-  # the demo's ceremony-seed convention).
+  # The translation hub: stateless — no journal, no state file; the
+  # manifest carries its identity and seed (the deployment-as-data
+  # doctrine), rendered to the hub's own env names.
   start_service hub unidpp-hub 8397 60 \
-    UNIDPP_HUB_BIND=127.0.0.1:8397 \
-    UNIDPP_HUB_ID=unidpp-hub-pilot \
-    UNIDPP_HUB_SEED=pilot-hub-relay-seed
+    $(../unidpp-config/target/release/unidpp-config render-env hub "$PILOT_DIR/unidpp-operator.yaml" | tr '\n' ' ')
 
   # The admin console: the operator manifest as its configuration.
   start_service console unidpp-console 8389 60 \

@@ -35,5 +35,7 @@ services:
     public_url: https://console.unidpp.org
   hub:
     bind: 127.0.0.1:8397
+    hub_id: unidpp-hub-pilot
+    seed: pilot-hub-relay-seed
 sovereignty:
   external_calls: external
