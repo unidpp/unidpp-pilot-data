@@ -33,5 +33,7 @@ services:
   console:
     bind: 127.0.0.1:8389
     public_url: https://console.unidpp.org
+  hub:
+    bind: 127.0.0.1:8397
 sovereignty:
   external_calls: external
