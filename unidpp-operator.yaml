@@ -28,6 +28,15 @@ services:
   gateway:
     bind: 127.0.0.1:8395
     issuer_url: http://127.0.0.1:8393
+    # The consumer report channel (TODO.impl 224): journaled under
+    # the pilot's run/ (append-only, replayed on restart) with a
+    # per-identifier rate window. No scan_policy here on purpose:
+    # absent = the gate is open — public resolution is the reference
+    # deployment's doctrine; scan policy is what a deployment under
+    # load opts into.
+    feedback:
+      journal: run/feedback-journal.jsonl
+      rate_per_minute: 10
   archive:
     bind: 127.0.0.1:8396
   console:

@@ -240,9 +240,11 @@ cmd_start() {
     UNIDPP_REGISTRY_URL=http://127.0.0.1:8390 \
     UNIDPP_PROJECTOR_PASSPORTS_DIR="$PASSPORTS_DIR"
 
+  # The interop gateway: the manifest carries its edge policy too
+  # (the feedback journal + rate window), rendered to the gateway's
+  # env names — the deployment-as-data doctrine, like the hub.
   start_service gateway unidpp-gateway 8395 60 \
-    UNIDPP_GATEWAY_BIND=127.0.0.1:8395 \
-    UNIDPP_ISSUER_URL=http://127.0.0.1:8393
+    $(../unidpp-config/target/release/unidpp-config render-env gateway "$PILOT_DIR/unidpp-operator.yaml" | tr '\n' ' ')
 
   start_service archive unidpp-archive 8396 60 \
     UNIDPP_ARCHIVE_BIND=127.0.0.1:8396 \
