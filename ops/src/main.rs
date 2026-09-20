@@ -17,8 +17,10 @@
 //! store. Every command is idempotent: a healthy listener of the
 //! right service is adopted, a foreign listener is named and refused.
 
-use std::io::{Read, Write};
-use std::net::{SocketAddr, TcpListener, TcpStream};
+mod http;
+mod seed;
+
+use std::net::{SocketAddr, TcpListener};
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -249,24 +251,10 @@ fn http(
     body: Option<&str>,
     timeout: Duration,
 ) -> Option<Response> {
-    let stream = TcpStream::connect(("127.0.0.1", port)).ok()?;
-    stream.set_read_timeout(Some(timeout)).ok()?;
-    stream.set_write_timeout(Some(timeout)).ok()?;
-    let mut stream = stream;
-    let request = format!(
-        "{} {} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\ncontent-type: application/json\r\ncontent-length: {}\r\n\r\n{}",
-        method,
-        path,
-        body.map(str::len).unwrap_or(0),
-        body.unwrap_or("")
-    );
-    stream.write_all(request.as_bytes()).ok()?;
-    let mut raw = Vec::new();
-    stream.read_to_end(&mut raw).ok()?;
-    let text = String::from_utf8_lossy(&raw).into_owned();
-    let status = text.split_whitespace().nth(1)?.parse().ok()?;
-    let body = text.split("\r\n\r\n").nth(1).unwrap_or("").to_string();
-    Some(Response { status, body })
+    crate::http::request(method, port, path, body, timeout).map(|r| Response {
+        status: r.status,
+        body: r.body,
+    })
 }
 
 fn healthy(port: u16) -> bool {
@@ -861,6 +849,7 @@ fn main() {
         Some("down") | Some("stop") => cmd_down(&pilot),
         Some("status") => cmd_status(&pilot),
         Some("seed-jp") => cmd_seed_jp(&pilot),
+        Some("seed") => seed::run(&pilot),
         Some("tenant") => match (
             args.get(1).map(String::as_str),
             args.get(2).map(String::as_str),

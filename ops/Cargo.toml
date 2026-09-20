@@ -8,3 +8,4 @@ description = "The pilot's orchestration: launch, healthcheck, seed and tear dow
 [dependencies]
 unidpp-config = { path = "../../unidpp-config" }
 serde_json = "1"
+sha2 = "0.10"
