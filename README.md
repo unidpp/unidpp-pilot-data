@@ -3,15 +3,15 @@
 The running UniDPP pilot: the full service stack on
 `127.0.0.1:8390-8397`, the seeded registry (jurisdiction +
 material-loop profiles), and the demo artifacts a re-run of
-`seed-pilot.sh` produces against the live services.
+`unidpp-stack seed` produces against the live services.
 
 ## Stack (TODO.impl C8 — pilot-orchestration)
 
 ```sh
-./stack.sh start     # build-if-needed + start all seven + wait healthy
-./seed-pilot.sh      # idempotent: seed + demo artifacts (below)
-./stack.sh status    # per-service health + journal + tunnel state
-./stack.sh stop      # stop everything; journals are preserved
+./ops/target/release/unidpp-stack up     # build-if-needed + start all ten + wait healthy
+./ops/target/release/unidpp-stack seed   # idempotent: seed + demo artifacts (below)
+./ops/target/release/unidpp-stack status # per-service health + journal + tunnel state
+./ops/target/release/unidpp-stack down   # stop everything; journals are preserved
 ```
 
 | Service | Port | Role | Health | Upstream |
@@ -29,7 +29,7 @@ Notes:
 
 - `docker-compose.yml` sketches the same stack containerized
   (build contexts into the sibling repos) — documented, not the
-  primary path; `stack.sh` is.
+  primary path; `unidpp-stack` is.
 - The launcher verifies each port serves the **right** service
   (discovery `service` field), because the unidpp-registry-kit
   launcher also defaults to 8391. If the kit's demo registry holds
@@ -56,7 +56,7 @@ Notes:
 - **Discovery dataset** (`POST /admin/seed`): 8 C3 services, 5 C4
   protocol bindings, 3 C5 verification mechanisms, 10 C1 units.
 
-## Demo artifacts (`seed-pilot.sh`, all under `demo/`)
+## Demo artifacts (`unidpp-stack seed`, all under `demo/`)
 
 | Artifact | What it is |
 |---|---|
@@ -103,7 +103,7 @@ curl -s http://127.0.0.1:8391/keyring | jq '{mode, roles: (.roles | keys)}'
 
 Cloudflare named tunnel f45249fa-0190-4ae8-b98c-1dc39c5010c8 (ingress
 `pilot.unidpp.org` → `127.0.0.1:8390`; the registry only — the rest
-of the stack is loopback by design). `stack.sh` adopts or starts the
+of the stack is loopback by design). `unidpp-stack up` adopts or starts the
 tunnel from `tunnel.token`.
 
 **BLOCKED**: DNS record creation needs Zone DNS Edit on the token. Fix (one of):
@@ -118,12 +118,12 @@ tunnel from `tunnel.token`.
 The pilot is the always-on demo host. Two commands are the whole
 operating loop (TODO.impl 115):
 
-- `./stack.sh status` — the truth: every service (incl. the console
+- `./ops/target/release/unidpp-stack status` — the truth: every service (incl. the console
   and the JP node), journal state, and **the public hostname probed
   through the tunnel** — a live tunnel process with a dead origin
   answers 502 and status says so. Exits non-zero when anything is
   down or publicly unreachable.
-- `./stack.sh start` — the idempotent repair: healthy services are
+- `./ops/target/release/unidpp-stack up` — the idempotent repair: healthy services are
   reused untouched, dead ones are restarted (journals replay), and
   every tunnel is re-ensured. A second run is a no-op.
 
@@ -132,8 +132,8 @@ by process name on this box — the pilot's services share binary
 names with test instances (a name-based `pkill unidpp-registry`
 once killed the pilot's registry and JP node while their tunnels
 kept answering 502 publicly). Kill by the exact PID from
-`run/*.pid`, or `./stack.sh stop`. After any local test run that
-spawned services, `./stack.sh status` to confirm the pilot's
+`run/*.pid`, or `unidpp-stack down`. After any local test run that
+spawned services, `unidpp-stack status` to confirm the pilot's
 integrity.
 
 A cron watch is the always-on pattern on a laptop-class host:

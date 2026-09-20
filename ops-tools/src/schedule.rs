@@ -2,7 +2,8 @@
 //! installs name the program's own path (the lines the shell script
 //! installed named the script's, which is why operators reinstall
 //! when they adopt the program — the marker is the same, the command
-//! is the program). The watch line still drives `stack.sh start`,
+//! is the program). The watch line drives the orchestrator's
+//! idempotent `up`,
 //! which remains the idempotent repair. Prune is report-only by
 //! default: deletion is an explicit act.
 
@@ -61,9 +62,11 @@ fn schedule_line(root: &Path) -> String {
 }
 
 fn watch_line(root: &Path) -> String {
+    // The watch drives the orchestrator (the successor of
+    // `stack.sh start`): idempotent adopt-or-start every ten minutes.
     format!(
-        "*/10 * * * * cd {} && ./stack.sh start >/dev/null 2>&1 # {WATCH_MARKER}",
-        root.display()
+        "*/10 * * * * cd {root} && {root}/ops/target/release/unidpp-stack up >/dev/null 2>&1 # {WATCH_MARKER}",
+        root = root.display()
     )
 }
 
@@ -77,18 +80,22 @@ pub fn cmd_schedule(root: &Path, args: &[String]) {
                 util::die("usage: schedule --watch --install");
             }
             let current = crontab_text();
-            if current.contains(WATCH_MARKER) {
-                println!("watch: already installed (marker present)");
+            // Idempotent install = the marker's line carries THIS
+            // program's command: a stale marked line (the shell
+            // script's, or an older binary path) is replaced, not
+            // trusted.
+            let line = watch_line(root);
+            let replaced = current.lines().any(|l| l.contains(WATCH_MARKER) && l == line);
+            if replaced {
+                println!("watch: already installed (the current line)");
                 return;
             }
             let mut table = String::new();
-            if !current.trim().is_empty() {
-                table.push_str(&current);
-                if !table.ends_with('\n') {
-                    table.push('\n');
-                }
+            for existing in current.lines().filter(|l| !l.contains(WATCH_MARKER)) {
+                table.push_str(existing);
+                table.push('\n');
             }
-            table.push_str(&watch_line(root));
+            table.push_str(&line);
             table.push('\n');
             crontab_install(&table);
             println!("watch: installed (*/10 — the idempotent repair)");
@@ -119,18 +126,17 @@ pub fn cmd_schedule(root: &Path, args: &[String]) {
         }
         "--install" => {
             let current = crontab_text();
-            if current.contains(SCHEDULE_MARKER) {
-                println!("schedule: already installed (marker present in the crontab)");
+            let line = schedule_line(root);
+            if current.lines().any(|l| l.contains(SCHEDULE_MARKER) && l == line) {
+                println!("schedule: already installed (the current line)");
                 return;
             }
             let mut table = String::new();
-            if !current.trim().is_empty() {
-                table.push_str(&current);
-                if !table.ends_with('\n') {
-                    table.push('\n');
-                }
+            for existing in current.lines().filter(|l| !l.contains(SCHEDULE_MARKER)) {
+                table.push_str(existing);
+                table.push('\n');
             }
-            table.push_str(&schedule_line(root));
+            table.push_str(&line);
             table.push('\n');
             crontab_install(&table);
             println!("schedule: installed (17 3 * * * nightly — see 'crontab -l')");
