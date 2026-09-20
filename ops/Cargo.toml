@@ -1,0 +1,10 @@
+[package]
+name = "unidpp-stack"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "The pilot's orchestration: launch, healthcheck, seed and tear down the ten services of the reference deployment from the operator manifest (the deployment-as-data doctrine; the successor of stack.sh)"
+
+[dependencies]
+unidpp-config = { path = "../../unidpp-config" }
+serde_json = "1"

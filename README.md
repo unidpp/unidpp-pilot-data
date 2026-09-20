@@ -212,3 +212,12 @@ validates and renders service environments from.
 
 Zero code differs between the reference deployment and a tenant: the
 manifest is the product.
+## The orchestrator
+
+`ops/unidpp-stack` (Rust) is the stack's interface — `up`, `status`,
+`down`, `seed-jp` and `tenant <name>` — building, launching,
+healthchecking and tearing down the ten services from the operator
+manifest (unidpp-config linked as a library, the environment rendered
+in-process). The shell scripts remain during the cutover window;
+`unidpp-stack` is the primary interface from now on. See `ops/README.md`.
+
