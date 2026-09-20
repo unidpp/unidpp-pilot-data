@@ -1,0 +1,10 @@
+[package]
+name = "unidpp-ops"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "The deployment's durability contract, as a program (TODO 246): backup, verify, restore, schedule, prune, bundle, drill, recover — the deployment as data, a versioned archive beside a JSON sidecar of per-file checksums, and the restore rehearsal that proves both (the successor of the unidpp-ops shell script)"
+
+[dependencies]
+serde_json = "1"
+sha2 = "0.10"
