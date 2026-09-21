@@ -90,13 +90,17 @@ jobs:
         with:
           repository: unidpp/unidpp-console
           path: unidpp-console
+      - uses: actions/checkout@v4
+        with:
+          repository: unidpp/unidpp-hub
+          path: unidpp-hub
       - uses: dtolnay/rust-toolchain@stable
       - name: Build the stack, the orchestrator and the durability program
         run: |
           set -eu
           for repo in unidpp-cli unidpp-config unidpp-registry unidpp-trust \
                       unidpp-log unidpp-issuer unidpp-projector unidpp-gateway \
-                      unidpp-archive unidpp-console; do
+                      unidpp-archive unidpp-hub unidpp-console; do
             cargo build --release --manifest-path "../$repo/Cargo.toml"
           done
           cargo build --release --manifest-path ops/Cargo.toml
