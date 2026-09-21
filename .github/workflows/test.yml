@@ -5,20 +5,34 @@ on:
   pull_request:
 
 jobs:
-  scripts:
+  # The orchestrator and the durability program: rustfmt and clippy
+  # hold both, exactly as they hold every family crate.
+  crates:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        crate: [ops, ops-tools]
     steps:
       - uses: actions/checkout@v4
-      - name: Syntax-check every script
-        run: |
-          set -eu
-          for f in stack.sh seed-pilot.sh seed-jp.sh; do
-            bash -n "$f"
-            echo "ok: $f"
-          done
+        with:
+          path: unidpp-pilot-data
+      - uses: actions/checkout@v4
+        with:
+          repository: unidpp/unidpp-config
+          path: unidpp-config
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: rustfmt
+        run: cargo fmt --all -- --check
+        working-directory: unidpp-pilot-data/${{ matrix.crate }}
+      - name: clippy
+        run: cargo clippy --all-targets -- -D warnings
+        working-directory: unidpp-pilot-data/${{ matrix.crate }}
 
-  # The durability contract, exercised end to end: the stack slice a
-  # backup captures, restored and drilled on a clean runner.
+  # The durability contract, exercised end to end: the stack the
+  # orchestrator brings up, seeded through the walkthrough, captured
+  # by the durability program, restored and drilled on a clean runner.
   ops-contract:
     runs-on: ubuntu-latest
     defaults:
@@ -77,7 +91,7 @@ jobs:
           repository: unidpp/unidpp-console
           path: unidpp-console
       - uses: dtolnay/rust-toolchain@stable
-      - name: Build the stack
+      - name: Build the stack, the orchestrator and the durability program
         run: |
           set -eu
           for repo in unidpp-cli unidpp-config unidpp-registry unidpp-trust \
@@ -85,54 +99,60 @@ jobs:
                       unidpp-archive unidpp-console; do
             cargo build --release --manifest-path "../$repo/Cargo.toml"
           done
+          cargo build --release --manifest-path ops/Cargo.toml
+          cargo build --release --manifest-path ops-tools/Cargo.toml
       - name: Start the stack
         run: |
           set -eu
-          ./stack.sh start
-          ./stack.sh status
+          ./ops/target/release/unidpp-stack up
+          ./ops/target/release/unidpp-stack status
       - name: Seed
-        run: ./seed-pilot.sh
+        run: ./ops/target/release/unidpp-stack seed
       - name: 'The contract: backup, verify, restore parity'
         run: |
           set -eu
-          ./unidpp-ops backup
+          ops="./ops-tools/target/release/unidpp-ops"
+          $ops backup
           archive="$(printf '%s\n' backups/*.tar.gz | sort -r | head -1)"
-          ./unidpp-ops verify "$archive"
-          ./unidpp-ops restore "$archive" ci-restored
+          $ops verify "$archive"
+          $ops restore "$archive" ci-restored
       - name: The drill
-        run: ./unidpp-ops drill
+        run: ./ops-tools/target/release/unidpp-ops drill
       - name: 'The recover drill (original shape)'
-        run: ./unidpp-ops drill --recover
+        run: ./ops-tools/target/release/unidpp-ops drill --recover
       - name: 'The tenant runner: whitelabel up, healthy, down'
         run: |
           set -eu
+          stack="./ops/target/release/unidpp-stack"
           cp="$(printf '%s\n' tenants/acme-cn/*-journal.jsonl | sort | head -1)"
           before="$(sha256sum "$cp" | cut -d' ' -f1)"
-          ./tenants/up.sh acme-cn start
-          ./tenants/up.sh acme-cn status | grep -c running
+          $stack tenant acme-cn up
+          $stack tenant acme-cn status | grep -c running
           curl -sf -m 5 http://127.0.0.1:9590/healthz
           curl -sf -m 5 http://127.0.0.1:9593/healthz
-          ./tenants/up.sh acme-cn stop
+          $stack tenant acme-cn down
           after="$(sha256sum "$cp" | cut -d' ' -f1)"
           [ "$before" = "$after" ] && echo "tenant journals append-only across the cycle"
       - name: 'The data-only bundle restores as a tenant'
         run: |
           set -eu
-          ./unidpp-ops bundle acme-cn --data-only
+          ops="./ops-tools/target/release/unidpp-ops"
+          $ops bundle acme-cn --data-only
           data="$(printf '%s\n' backups/acme-cn-data-*.tar.gz | sort -r | head -1)"
-          ./unidpp-ops verify "$data"
-          ./unidpp-ops restore "$data" acme-cn-moved
+          $ops verify "$data"
+          $ops restore "$data" acme-cn-moved
           ../unidpp-config/target/release/unidpp-config validate tenants/acme-cn-moved/unidpp-operator.yaml
       - name: 'The bundle first-boots from its own contents'
         run: |
           set -eu
+          ops="./ops-tools/target/release/unidpp-ops"
           mkdir -p tenants/scratch-fw
           sed -e 's/name: acme-cn/name: scratch-fw/' -e 's/9590/9690/' \
               -e 's/9593/9693/' -e 's/9589/9689/' \
               tenants/acme-cn/unidpp-operator.yaml > tenants/scratch-fw/unidpp-operator.yaml
-          ./unidpp-ops bundle scratch-fw
+          $ops bundle scratch-fw
           fb="$(printf '%s\n' backups/scratch-fw-bundle-*.tar.gz | sort -r | head -1)"
-          ./unidpp-ops verify "$fb"
+          $ops verify "$fb"
           tmp="$(mktemp -d)"
           tar -xzf "$fb" -C "$tmp"
           "$tmp/scratch-fw/run.sh" start
@@ -145,15 +165,16 @@ jobs:
       - name: The bundle
         run: |
           set -eu
-          ./seed-jp.sh >/dev/null 2>&1 || true
+          ops="./ops-tools/target/release/unidpp-ops"
+          ./ops/target/release/unidpp-stack seed-jp >/dev/null 2>&1 || true
           # acme-cn is the sovereign tenant; create it if the runner's
           # seed did not (it is committed, so it exists).
-          ./unidpp-ops bundle acme-cn
+          $ops bundle acme-cn
           bundle="$(printf '%s\n' backups/acme-cn-bundle-*.tar.gz | sort -r | head -1)"
-          ./unidpp-ops verify "$bundle"
+          $ops verify "$bundle"
           tmp="$(mktemp -d)"
           tar -xzf "$bundle" -C "$tmp"
           "$tmp/acme-cn/bin/unidpp-config" validate "$tmp/acme-cn/unidpp-operator.yaml"
       - name: Teardown
         if: always()
-        run: ./stack.sh stop
+        run: ./ops/target/release/unidpp-stack down
