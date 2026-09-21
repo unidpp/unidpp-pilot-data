@@ -2,9 +2,9 @@
 //! needs on their own host, verified like a backup. The manifest is
 //! the model — only the services it declares ship, and the
 //! data-only variant carries tenant state alone for a deployment
-//! that already has its engine. The bundle's own runner and runbook
-//! travel inside it verbatim, exactly as the shell script wrote
-//! them.
+//! that already has its engine. The bundle's own runner (`unidpp-run`,
+//! this crate's second binary) and runbook travel inside it, so the
+//! receiving host needs nothing but this archive.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -13,65 +13,8 @@ use std::process::{Command, Stdio};
 use crate::backup;
 use crate::util;
 
-/// The bundle's own runner, byte-identical to the heredoc the shell
-/// script embedded: the manifest at the bundle root, every binary
-/// from ./bin, self-contained by construction.
-const RUN_SH: &str = r##"#!/usr/bin/env bash
-# run.sh — the bundle's own runner (start|stop|status).
-# The manifest is ./unidpp-operator.yaml; every binary comes from
-# ./bin; pidfiles and logs live under ./run.
-set -euo pipefail
-HERE="$(cd "$(dirname "$0")" && pwd)"
-CONFIG="$HERE/bin/unidpp-config"
-MANIFEST="$HERE/unidpp-operator.yaml"
-ACTION="${1:-start}"
-mkdir -p "$HERE/run"
-
-case "$ACTION" in
-  start) ;;
-  stop) ;;
-  status) ;;
-  *) echo "usage: ./run.sh [start|stop|status]" >&2; exit 2 ;;
-esac
-
-[ -x "$CONFIG" ] || { echo "run.sh: no unidpp-config in ./bin" >&2; exit 1; }
-
-for name in $("$CONFIG" services "$MANIFEST"); do
-  binary="$HERE/bin/unidpp-$name"
-  pidfile="$HERE/run/$name.pid"
-  if [ "$ACTION" = stop ]; then
-    if [ -f "$pidfile" ] && kill "$(cat "$pidfile")" 2>/dev/null; then
-      echo "stopped $name"
-    else
-      echo "$name not running"
-    fi
-    continue
-  fi
-  if [ "$ACTION" = status ]; then
-    if [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then
-      echo "  $name: running (pid $(cat "$pidfile"))"
-    else
-      echo "  $name: down"
-    fi
-    continue
-  fi
-  if [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then
-    echo "  $name: already running"
-    continue
-  fi
-  [ -x "$binary" ] || { echo "run.sh: no binary for $name at $binary" >&2; exit 1; }
-  # shellcheck disable=SC2046
-  env $( "$CONFIG" render-env "$name" "$MANIFEST" ) \
-    ${name:+$([ "$name" = console ] && printf 'UNIDPP_CONSOLE_MANIFEST=%s ' "$MANIFEST")} \
-    nohup "$binary" > "$HERE/run/$name.log" 2>&1 &
-  echo $! > "$pidfile"
-  echo "  $name: started (pid $(cat "$pidfile"))"
-done
-"##;
-
 /// The runbook, with the tenant name and the production moment
-/// substituted; every other brace and `${VAR}` stays literal, as it
-/// did in the script's heredoc.
+/// substituted; every other brace and `${VAR}` stays literal.
 const RUNBOOK: &str = r##"# @@TENANT@@ — on-prem deployment bundle
 
 This bundle IS a deployment: the manifest (unidpp-operator.yaml) is
@@ -81,8 +24,8 @@ the data; the binaries are the engine. Produced @@PRODUCED@@Z.
 
     ./bin/unidpp-config validate unidpp-operator.yaml   # always validate first
     cp .env.template .env                               # fill every ${VAR}
-    ./run.sh start                                      # render-env + ./bin binaries
-    ./run.sh status
+    ./unidpp-run start                                  # render-env + ./bin binaries
+    ./unidpp-run status
 
 Ports, state files, suites, sovereignty rules: read them from the
 manifest — the runner and the services take everything from it.
@@ -243,20 +186,35 @@ pub fn cmd_bundle(root: &Path, backups: &Path, args: &[String], quiet: bool) {
             );
         }
         copy(&config_cli, &stage_tenant.join("bin").join("unidpp-config"));
-        // The deployment shell-script `unidpp-ops` retired with the
-        // shell-free pass; the durability program now lives at
-        // ops-tools/target/{release,debug}/unidpp-ops, beside the
-        // runner here. Resolve via the running binary so debug and
-        // release both stage the exact one in use.
-        let self_exe = std::env::current_exe()
-            .unwrap_or_else(|e| util::die(&format!("cannot resolve the running unidpp-ops: {e}")));
+        // The durability program and the bundle runner, resolved from
+        // the running binary's directory so debug and release both
+        // stage the exact builds in use.
+        let exe_dir = std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(Path::to_path_buf))
+            .unwrap_or_else(|| util::die("cannot resolve the running binary's directory"));
+        let self_exe = exe_dir.join("unidpp-ops");
+        if !util::is_executable(&self_exe) {
+            util::die(&format!(
+                "unidpp-ops binary missing: {}",
+                self_exe.display()
+            ));
+        }
         copy(&self_exe, &stage_tenant.join("unidpp-ops"));
-        let run_sh = stage_tenant.join("run.sh");
-        std::fs::write(&run_sh, RUN_SH).unwrap_or_else(|e| util::die(&format!("run.sh: {e}")));
+        let runner = exe_dir.join("unidpp-run");
+        if !util::is_executable(&runner) {
+            util::die(&format!(
+                "unidpp-run binary missing (build the ops crate): {}",
+                runner.display()
+            ));
+        }
+        copy(&runner, &stage_tenant.join("unidpp-run"));
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let _ = std::fs::set_permissions(&run_sh, std::fs::Permissions::from_mode(0o755));
+            let staged_runner = stage_tenant.join("unidpp-run");
+            let _ =
+                std::fs::set_permissions(&staged_runner, std::fs::Permissions::from_mode(0o755));
         }
     }
 

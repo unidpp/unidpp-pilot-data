@@ -158,12 +158,12 @@ jobs:
           $ops verify "$fb"
           tmp="$(mktemp -d)"
           tar -xzf "$fb" -C "$tmp"
-          "$tmp/scratch-fw/run.sh" start
+          "$tmp/scratch-fw/unidpp-run" start
           sleep 3
           curl -sf -m 5 http://127.0.0.1:9690/healthz
           curl -sf -m 5 http://127.0.0.1:9693/healthz
-          "$tmp/scratch-fw/run.sh" status | grep -c running
-          "$tmp/scratch-fw/run.sh" stop
+          "$tmp/scratch-fw/unidpp-run" status | grep -c running
+          "$tmp/scratch-fw/unidpp-run" stop
           rm -rf "$tmp" tenants/scratch-fw
       - name: The bundle
         run: |
