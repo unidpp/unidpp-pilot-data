@@ -243,7 +243,14 @@ pub fn cmd_bundle(root: &Path, backups: &Path, args: &[String], quiet: bool) {
             );
         }
         copy(&config_cli, &stage_tenant.join("bin").join("unidpp-config"));
-        copy(&root.join("unidpp-ops"), &stage_tenant.join("unidpp-ops"));
+        // The deployment shell-script `unidpp-ops` retired with the
+        // shell-free pass; the durability program now lives at
+        // ops-tools/target/{release,debug}/unidpp-ops, beside the
+        // runner here. Resolve via the running binary so debug and
+        // release both stage the exact one in use.
+        let self_exe = std::env::current_exe()
+            .unwrap_or_else(|e| util::die(&format!("cannot resolve the running unidpp-ops: {e}")));
+        copy(&self_exe, &stage_tenant.join("unidpp-ops"));
         let run_sh = stage_tenant.join("run.sh");
         std::fs::write(&run_sh, RUN_SH).unwrap_or_else(|e| util::die(&format!("run.sh: {e}")));
         #[cfg(unix)]
