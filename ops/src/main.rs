@@ -288,6 +288,74 @@ fn is_ours(port: u16, repo: &str) -> bool {
     healthy(port) && service_id(port).as_deref() == Some(repo)
 }
 
+/// The service's served contract: the `/openapi.yaml` body.
+fn served_contract(port: u16) -> Option<String> {
+    http(
+        "GET",
+        port,
+        "/openapi.yaml",
+        None,
+        std::time::Duration::from_secs(3),
+    )
+    .filter(|r| r.status == 200)
+    .map(|r| r.body)
+}
+
+/// The service repo's committed golden.
+fn repo_golden(pilot: &Pilot, repo: &str) -> Option<String> {
+    std::fs::read_to_string(pilot.family.join(repo).join("openapi.yaml")).ok()
+}
+
+/// Currency (249): a healthy listener of the right service whose
+/// SERVED contract equals the repo's committed golden. A binary older
+/// than its contract cannot reproduce the golden — this is the
+/// deployment-drift gate.
+fn is_current(pilot: &Pilot, port: u16, repo: &str) -> bool {
+    is_ours(port, repo)
+        && match (served_contract(port), repo_golden(pilot, repo)) {
+            (Some(served), Some(golden)) => served.trim() == golden.trim(),
+            _ => false,
+        }
+}
+
+/// Reconcile one listener: adopt what is current; stop, rebuild and
+/// restart what is stale (the watch self-heals drift exactly as it
+/// heals downtime; a rebuild failure is stated, not fatal).
+fn reconcile(pilot: &Pilot, spec: &ServiceSpec, tries: u32) {
+    if is_current(pilot, spec.port, spec.repo) {
+        println!(
+            "==> {} current on http://127.0.0.1:{} (reusing)",
+            spec.name, spec.port
+        );
+        return;
+    }
+    if is_ours(spec.port, spec.repo) {
+        println!(
+            "==> {} is healthy but STALE (its served contract is not the committed golden) — rebuilding",
+            spec.name
+        );
+        let pidfile = pilot.run_dir().join(format!("{}.pid", spec.name));
+        if let Ok(pid) = std::fs::read_to_string(&pidfile) {
+            if let Ok(pid) = pid.trim().parse::<u32>() {
+                if alive(pid) {
+                    let _ = Command::new("kill").arg(pid.to_string()).status();
+                }
+            }
+        }
+        let _ = std::fs::remove_file(&pidfile);
+        for _ in 0..100 {
+            if !port_taken(spec.port) {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        ensure_bin_opt(pilot, spec.repo, true);
+        start_service(pilot, spec, tries);
+        return;
+    }
+    start_service(pilot, spec, tries);
+}
+
 fn port_taken(port: u16) -> bool {
     TcpListener::bind(("127.0.0.1", port)).is_err()
 }
@@ -312,8 +380,15 @@ fn die(msg: &str) -> ! {
 // ---------------------------------------------------------------------------
 
 fn ensure_bin(pilot: &Pilot, repo: &str) {
+    ensure_bin_opt(pilot, repo, false);
+}
+
+/// `force` rebuilds even when the binary exists (the reconciler's
+/// stale path: a present-but-old binary is exactly what it fixes).
+fn ensure_bin_opt(pilot: &Pilot, repo: &str, force: bool) {
     let bin = pilot.bin(repo);
-    if bin.is_file() && std::env::var("UNIDPP_FORCE_BUILD").as_deref() != Ok("1") {
+    let forced = force || std::env::var("UNIDPP_FORCE_BUILD").as_deref() == Ok("1");
+    if bin.is_file() && !forced {
         return;
     }
     if !Command::new("cargo")
@@ -505,7 +580,7 @@ fn cmd_up(pilot: &Pilot) {
     // Registry first: the issuer forwards to it, the projector reads
     // from it. Journals replay on start; nothing is wiped.
     for spec in services(pilot) {
-        start_service(pilot, &spec, 120);
+        reconcile(pilot, &spec, 120);
     }
     ensure_named_tunnel(pilot, "tunnel", "registry.unidpp.org", 8390);
     ensure_named_tunnel(pilot, "jp-tunnel", "registry-jp.unidpp.org", 8399);
@@ -596,6 +671,47 @@ fn json_count(port: u16, path: &str, key: &str) -> String {
         }
         _ => "?".into(),
     }
+}
+
+/// `verify` — the deployment against the contracts: every service's
+/// served `/openapi.yaml` equals its repo's committed golden.
+fn cmd_verify(pilot: &Pilot) {
+    let mut failed = false;
+    for spec in services(pilot) {
+        if !healthy(spec.port) {
+            println!("  {:<12} http://127.0.0.1:{}  DOWN", spec.name, spec.port);
+            failed = true;
+            continue;
+        }
+        let served = served_contract(spec.port);
+        let golden = repo_golden(pilot, spec.repo);
+        match (served, golden) {
+            (Some(served), Some(golden)) if served.trim() == golden.trim() => {
+                println!(
+                    "  {:<12} http://127.0.0.1:{}  CURRENT",
+                    spec.name, spec.port
+                );
+            }
+            (Some(_), None) => {
+                println!(
+                    "  {:<12} http://127.0.0.1:{}  NO GOLDEN in {}/openapi.yaml — cannot judge",
+                    spec.name, spec.port, spec.repo
+                );
+                failed = true;
+            }
+            _ => {
+                println!(
+                    "  {:<12} http://127.0.0.1:{}  STALE — the served contract is not the committed golden (rebuild + `unidpp-stack up`)",
+                    spec.name, spec.port
+                );
+                failed = true;
+            }
+        }
+    }
+    if failed {
+        std::process::exit(1);
+    }
+    println!("verify: every service serves its committed contract");
 }
 
 fn cmd_status(pilot: &Pilot) {
@@ -814,7 +930,7 @@ fn cmd_tenant(pilot: &Pilot, tenant: &str, action: &str) {
 }
 
 fn usage() -> ! {
-    die("usage: unidpp-stack <up|down|status|seed-jp> | tenant <name> <up|down|status>")
+    die("usage: unidpp-stack <up|down|status|verify|seed|seed-jp> | tenant <name> <up|down|status>")
 }
 
 fn main() {
@@ -848,6 +964,7 @@ fn main() {
         Some("up") | Some("start") => cmd_up(&pilot),
         Some("down") | Some("stop") => cmd_down(&pilot),
         Some("status") => cmd_status(&pilot),
+        Some("verify") => cmd_verify(&pilot),
         Some("seed-jp") => cmd_seed_jp(&pilot),
         Some("seed") => seed::run(&pilot),
         Some("tenant") => match (
