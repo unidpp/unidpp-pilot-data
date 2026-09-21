@@ -85,7 +85,9 @@ pub fn cmd_schedule(root: &Path, args: &[String]) {
             // script's, or an older binary path) is replaced, not
             // trusted.
             let line = watch_line(root);
-            let replaced = current.lines().any(|l| l.contains(WATCH_MARKER) && l == line);
+            let replaced = current
+                .lines()
+                .any(|l| l.contains(WATCH_MARKER) && l == line);
             if replaced {
                 println!("watch: already installed (the current line)");
                 return;
@@ -127,7 +129,10 @@ pub fn cmd_schedule(root: &Path, args: &[String]) {
         "--install" => {
             let current = crontab_text();
             let line = schedule_line(root);
-            if current.lines().any(|l| l.contains(SCHEDULE_MARKER) && l == line) {
+            if current
+                .lines()
+                .any(|l| l.contains(SCHEDULE_MARKER) && l == line)
+            {
                 println!("schedule: already installed (the current line)");
                 return;
             }
