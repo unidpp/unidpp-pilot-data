@@ -20,9 +20,9 @@ jobs:
         with:
           repository: unidpp/unidpp-config
           path: unidpp-config
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
+      # No toolchain step: rustup resolves rust-toolchain.toml at
+      # every cargo invocation, so CI installs and formats with the
+      # exact pinned generation (the file is the single source).
       - name: rustfmt
         run: cargo fmt --all -- --check
         working-directory: unidpp-pilot-data/${{ matrix.crate }}
@@ -94,7 +94,6 @@ jobs:
         with:
           repository: unidpp/unidpp-hub
           path: unidpp-hub
-      - uses: dtolnay/rust-toolchain@stable
       - name: Build the stack, the orchestrator and the durability program
         run: |
           set -eu
