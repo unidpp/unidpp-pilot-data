@@ -151,10 +151,30 @@ runs both tunnels from `trust-tunnel.token` / `log-tunnel.token` the
 moment those files exist (same pattern as the JP and console
 tunnels; `stack.sh status` reports them either way).
 
-One-time provisioning per tunnel (needs a Cloudflare API token with
+One-time provisioning per tunnel. Two paths:
+
+**Path A — one authorization click (the cert-login route).** Run
+`cloudflared tunnel login` and click the `unidpp.org` zone in the
+opened browser tab; `~/.cloudflared/cert.pem` then lets the CLI do
+the rest:
+
+```sh
+cloudflared tunnel login                      # click the unidpp.org zone
+cd ~/src/unidpp/unidpp-pilot-data
+cloudflared tunnel create trust-tunnel
+cloudflared tunnel route dns trust-tunnel trust.unidpp.org
+cloudflared tunnel token trust-tunnel > trust-tunnel.token   # gitignored
+cloudflared tunnel create log-tunnel
+cloudflared tunnel route dns log-tunnel log.unidpp.org
+cloudflared tunnel token log-tunnel > log-tunnel.token
+chmod 600 trust-tunnel.token log-tunnel.token
+./ops/target/release/unidpp-stack up          # lights both hostnames
+```
+
+**Path B — the API** (needs a Cloudflare API token with
 Account → Cloudflare Tunnel → Edit and Zone → DNS → Edit — the
-token in `~/.config/cloudflare-tokens/unidpp-admin` is currently
-**expired**, re-create it first):
+token in `~/.config/cloudflare-tokens/unidpp-admin` was verified
+**invalid** on 2026-09-22; re-create it first):
 
 ```sh
 TOKEN=<valid-token>
