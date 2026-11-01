@@ -9,13 +9,57 @@ use std::path::Path;
 use std::process::Command;
 use std::time::Duration;
 
-use crate::{die, healthy, Pilot};
+use crate::{die, Pilot};
 
 const REGISTRY: u16 = 8390;
 const ISSUER: u16 = 8393;
 const PROJECTOR: u16 = 8394;
 const GATEWAY: u16 = 8395;
 const ARCHIVE: u16 = 8396;
+
+/// The seed's service bases: the one deployment addresses every
+/// module by prefixed path on the shared origin; the ten-service
+/// stack addresses them by port. Resolution: `UNIDPP_STACK_ONE`
+/// overrides, else the one server's presence decides (REARCH R2).
+struct Bases {
+    registry: String,
+    issuer: String,
+    projector: String,
+    gateway: String,
+    archive: String,
+}
+
+fn bases() -> Bases {
+    let one = match std::env::var("UNIDPP_STACK_ONE") {
+        Ok(value) if !value.trim().is_empty() => Some(value.trim_end_matches('/').to_string()),
+        _ => {
+            let origin = format!("http://127.0.0.1:{}", crate::ONE_PORT);
+            let ours = http::get_url(&origin, "/version", Duration::from_secs(2))
+                .map(|r| r.status == 200)
+                .unwrap_or(false)
+                && http::get_url(&origin, "/version", Duration::from_secs(2))
+                    .map(|r| parse(&r.body)["service"] == "unidpp")
+                    .unwrap_or(false);
+            ours.then_some(origin)
+        }
+    };
+    match one {
+        Some(origin) => Bases {
+            registry: format!("{origin}/registry"),
+            issuer: format!("{origin}/issuer"),
+            projector: format!("{origin}/views"),
+            gateway: format!("{origin}/render"),
+            archive: format!("{origin}/archive"),
+        },
+        None => Bases {
+            registry: format!("http://127.0.0.1:{REGISTRY}"),
+            issuer: format!("http://127.0.0.1:{ISSUER}"),
+            projector: format!("http://127.0.0.1:{PROJECTOR}"),
+            gateway: format!("http://127.0.0.1:{GATEWAY}"),
+            archive: format!("http://127.0.0.1:{ARCHIVE}"),
+        },
+    }
+}
 
 const DEMO_ID: &str = "local:momiji:e8/J-000842";
 const DEMO_TYPE_REF: &str = "momiji:e8";
@@ -28,12 +72,12 @@ const VIEW_AT: &str = "2028-06-01T00:00:00Z";
 
 use crate::http::{self, HttpText};
 
-fn get(port: u16, path: &str) -> Option<HttpText> {
-    http::get(port, path, Duration::from_secs(20))
+fn get(base: &str, path: &str) -> Option<HttpText> {
+    http::get_url(base, path, Duration::from_secs(20))
 }
 
-fn post(port: u16, path: &str, body: &str) -> Option<HttpText> {
-    http::post(port, path, body, Duration::from_secs(20))
+fn post(base: &str, path: &str, body: &str) -> Option<HttpText> {
+    http::post_url(base, path, body, Duration::from_secs(20))
 }
 
 fn parse(body: &str) -> serde_json::Value {
@@ -119,15 +163,21 @@ fn sorted_profiles(doc: &serde_json::Value) -> Vec<String> {
 
 pub fn run(pilot: &Pilot) {
     let dir = artifact_dir(pilot);
-    for (name, port) in [
-        ("registry", REGISTRY),
-        ("issuer", ISSUER),
-        ("projector", PROJECTOR),
-        ("gateway", GATEWAY),
-        ("archive", ARCHIVE),
+    let b = bases();
+    for (name, base) in [
+        ("registry", b.registry.as_str()),
+        ("issuer", b.issuer.as_str()),
+        ("projector", b.projector.as_str()),
+        ("gateway", b.gateway.as_str()),
+        ("archive", b.archive.as_str()),
     ] {
-        if !healthy(port) {
-            die(&format!("{name} is not healthy — run: unidpp-stack up"));
+        let healthy = http::get_url(base, "/healthz", Duration::from_secs(5))
+            .map(|r| r.status == 200)
+            .unwrap_or(false);
+        if !healthy {
+            die(&format!(
+                "{name} is not healthy at {base} — run: unidpp-stack up  (or one-up)"
+            ));
         }
     }
     let cli = pilot.family.join("unidpp-cli/target/release/unidpp");
@@ -140,13 +190,13 @@ pub fn run(pilot: &Pilot) {
 
     // [1] discovery seed (C3/C4/C5 + C1 units)
     println!("== [1] discovery seed (C3/C4/C5 + C1 units)");
-    let units = get(REGISTRY, "/units")
+    let units = get(&bases().registry, "/units")
         .map(|r| count(&parse(&r.body), &["items"]))
         .unwrap_or(0);
     if units == 0 {
         let resp = expect_created(
             "POST /admin/seed",
-            post(REGISTRY, "/admin/seed", "{}").expect("seed answered"),
+            post(&bases().registry, "/admin/seed", "{}").expect("seed answered"),
             &[200, 201],
         );
         write_artifact(&dir, "00-discovery-seed.json", &resp.body);
@@ -165,7 +215,7 @@ pub fn run(pilot: &Pilot) {
     for entry in sorted_json_files(&pilot.dir.join("seed/items")) {
         let body = std::fs::read_to_string(&entry).unwrap();
         let item = text(&parse(&body), &["item_id"]);
-        let resp = post(REGISTRY, "/items", &body).expect("items answered");
+        let resp = post(&bases().registry, "/items", &body).expect("items answered");
         match resp.status {
             201 => println!("  registered {item}"),
             409 => println!("  present    {item}"),
@@ -181,7 +231,7 @@ pub fn run(pilot: &Pilot) {
     for entry in sorted_json_files(&pilot.dir.join("seed/lens")) {
         let body = std::fs::read_to_string(&entry).unwrap();
         let item = text(&parse(&body), &["item_id"]);
-        let resp = post(REGISTRY, "/profiles", &body).expect("profiles answered");
+        let resp = post(&bases().registry, "/profiles", &body).expect("profiles answered");
         match resp.status {
             201 => println!("  registered {item}"),
             409 => println!("  present    {item}"),
@@ -202,7 +252,7 @@ pub fn run(pilot: &Pilot) {
         let profile = text(&doc, &["profile_id"]);
         let subject = text(&doc, &["product_type"]);
         let bound = get(
-            REGISTRY,
+            &bases().registry,
             &format!("/applicability?product_type={subject}&at=2030-01-01T00:00:00Z"),
         )
         .map(|r| sorted_profiles(&parse(&r.body)).contains(&profile))
@@ -212,7 +262,7 @@ pub fn run(pilot: &Pilot) {
         } else {
             let resp = expect_created(
                 &format!("POST /applicability ({profile})"),
-                post(REGISTRY, "/applicability", &body).expect("bindings answered"),
+                post(&bases().registry, "/applicability", &body).expect("bindings answered"),
                 &[201],
             );
             let _ = resp;
@@ -237,7 +287,7 @@ pub fn run(pilot: &Pilot) {
     let enc = encode(DEMO_URN);
     let resp = expect_created(
         "POST /passports",
-        post(ISSUER, "/passports", &create.to_string()).expect("issuer answered"),
+        post(&bases().issuer, "/passports", &create.to_string()).expect("issuer answered"),
         &[201, 409],
     );
     if resp.status == 201 {
@@ -289,7 +339,7 @@ pub fn run(pilot: &Pilot) {
             &now,
         ),
     ];
-    let have = get(ISSUER, &format!("/passports/{enc}"))
+    let have = get(&bases().issuer, &format!("/passports/{enc}"))
         .map(|r| parse(&r.body)["events"].as_u64().unwrap_or(0) as usize)
         .unwrap_or(0);
     for (i, (type_token, data, actor, role, at)) in events.iter().enumerate().skip(have) {
@@ -303,7 +353,7 @@ pub fn run(pilot: &Pilot) {
         let resp = expect_created(
             &format!("POST /passports/{{urn}}/events ({type_token})"),
             post(
-                ISSUER,
+                &bases().issuer,
                 &format!("/passports/{enc}/events"),
                 &body.to_string(),
             )
@@ -325,7 +375,7 @@ pub fn run(pilot: &Pilot) {
     );
 
     // The full passport view: demo artifact + the projector's store copy.
-    let view = get(ISSUER, &format!("/passports/{enc}"))
+    let view = get(&bases().issuer, &format!("/passports/{enc}"))
         .unwrap_or_else(|| die("cannot fetch the passport view"));
     write_artifact(&dir, "02-passport-view.json", &view.body);
     std::fs::write(pilot.dir.join("passports/pilot-e8.json"), &view.body).unwrap();
@@ -341,11 +391,12 @@ pub fn run(pilot: &Pilot) {
     println!("== [6] Tier-A pack + CLI verify (anchor from the issuer /keyring)");
     let pack = expect_created(
         "POST /passports/{urn}/pack",
-        post(ISSUER, &format!("/passports/{enc}/pack"), "{}").expect("pack answered"),
+        post(&bases().issuer, &format!("/passports/{enc}/pack"), "{}").expect("pack answered"),
         &[201],
     );
     write_artifact(&dir, "03-tier-a-pack.json", &pack.body);
-    let keyring = get(ISSUER, "/keyring").unwrap_or_else(|| die("cannot fetch the keyring"));
+    let keyring =
+        get(&bases().issuer, "/keyring").unwrap_or_else(|| die("cannot fetch the keyring"));
     write_artifact(&dir, "04-issuer-keyring.json", &keyring.body);
     let pack_doc = parse(&pack.body);
     let anchor = text(&parse(&keyring.body), &["roles", "pack", "public"]);
@@ -404,7 +455,7 @@ pub fn run(pilot: &Pilot) {
     });
     let snap = expect_created(
         "POST /snapshots",
-        post(ARCHIVE, "/snapshots", &snapshot.to_string()).expect("archive answered"),
+        post(&bases().archive, "/snapshots", &snapshot.to_string()).expect("archive answered"),
         &[201],
     );
     write_artifact(&dir, "06-archive-snapshot.json", &snap.body);
@@ -423,7 +474,7 @@ pub fn run(pilot: &Pilot) {
             encode(DEMO_URN),
             encode(lens)
         );
-        let view = get(PROJECTOR, &path)
+        let view = get(&bases().projector, &path)
             .unwrap_or_else(|| die(&format!("projector view failed for {lens}")));
         write_artifact(&dir, &format!("07-projector-view-{tag}.json"), &view.body);
         let doc = parse(&view.body);
@@ -438,8 +489,11 @@ pub fn run(pilot: &Pilot) {
 
     // [9] gateway renders.
     println!("== [9] gateway renders (UNTP triad + EN 18222)");
-    let untp = get(GATEWAY, &format!("/untp/product/{}", encode(DEMO_URN)))
-        .unwrap_or_else(|| die("UNTP render failed"));
+    let untp = get(
+        &bases().gateway,
+        &format!("/untp/product/{}", encode(DEMO_URN)),
+    )
+    .unwrap_or_else(|| die("UNTP render failed"));
     write_artifact(&dir, "08-gateway-untp.json", &untp.body);
     let doc = parse(&untp.body);
     println!(
@@ -449,7 +503,7 @@ pub fn run(pilot: &Pilot) {
         text(&doc, &["verdict", "coverage", "signatures", "verified"])
     );
     let en = get(
-        GATEWAY,
+        &bases().gateway,
         &format!("/en18222/v1/dppsByProductId/{GTIN_FIXTURE}?representation=full"),
     )
     .unwrap_or_else(|| die("EN 18222 render failed"));
@@ -466,7 +520,7 @@ pub fn run(pilot: &Pilot) {
         ("2028-06-01T00:00:00Z", "11-applicability-2028-06-01.json"),
     ] {
         let resp = get(
-            REGISTRY,
+            &bases().registry,
             &format!("/applicability?product_type=momiji:e8&at={at}"),
         )
         .unwrap_or_else(|| die("as-of query failed"));

@@ -511,8 +511,10 @@ fn start_service(pilot: &Pilot, spec: &ServiceSpec, tries: u32) {
 }
 
 /// A named cloudflared tunnel: absent token skips cleanly; a live
-/// pidfile is adopted; else cloudflared starts detached.
-fn ensure_named_tunnel(pilot: &Pilot, stem: &str, hostname: &str, port: u16) {
+/// pidfile is adopted; else cloudflared starts detached. The origin
+/// is `host:port[/prefix]` — in one-server mode each hostname
+/// forwards its module prefix to the shared origin.
+fn ensure_named_tunnel(pilot: &Pilot, stem: &str, hostname: &str, origin: &str) {
     let token_file = pilot.dir.join(format!("{stem}.token"));
     if std::fs::metadata(&token_file)
         .map(|m| m.len() == 0)
@@ -541,7 +543,7 @@ fn ensure_named_tunnel(pilot: &Pilot, stem: &str, hostname: &str, port: u16) {
         println!("==> {stem}.token present but cloudflared is not installed — skipping");
         return;
     }
-    println!("==> starting cloudflared named tunnel ({hostname} -> {port})");
+    println!("==> starting cloudflared named tunnel ({hostname} -> {origin})");
     let token =
         std::fs::read_to_string(&token_file).unwrap_or_else(|e| die(&format!("{stem}.token: {e}")));
     let token = token.trim().to_string();
@@ -557,7 +559,7 @@ fn ensure_named_tunnel(pilot: &Pilot, stem: &str, hostname: &str, port: u16) {
             "--token",
             &token,
             "--url",
-            &format!("http://127.0.0.1:{port}"),
+            &format!("http://{origin}"),
         ])
         .stdout(
             log.try_clone()
@@ -582,11 +584,21 @@ fn cmd_up(pilot: &Pilot) {
     for spec in services(pilot) {
         reconcile(pilot, &spec, 120);
     }
-    ensure_named_tunnel(pilot, "tunnel", "registry.unidpp.org", 8390);
-    ensure_named_tunnel(pilot, "jp-tunnel", "registry-jp.unidpp.org", 8399);
-    ensure_named_tunnel(pilot, "console-tunnel", "console.unidpp.org", 8389);
-    ensure_named_tunnel(pilot, "trust-tunnel", "trust.unidpp.org", 8391);
-    ensure_named_tunnel(pilot, "log-tunnel", "log.unidpp.org", 8392);
+    ensure_named_tunnel(pilot, "tunnel", "registry.unidpp.org", "127.0.0.1:8390");
+    ensure_named_tunnel(
+        pilot,
+        "jp-tunnel",
+        "registry-jp.unidpp.org",
+        "127.0.0.1:8399",
+    );
+    ensure_named_tunnel(
+        pilot,
+        "console-tunnel",
+        "console.unidpp.org",
+        "127.0.0.1:8389",
+    );
+    ensure_named_tunnel(pilot, "trust-tunnel", "trust.unidpp.org", "127.0.0.1:8391");
+    ensure_named_tunnel(pilot, "log-tunnel", "log.unidpp.org", "127.0.0.1:8392");
     println!();
     println!("==> stack up: 8390 registry · 8391 trust · 8392 log · 8393 issuer");
     println!("               8394 projector · 8395 gateway · 8396 archive");
@@ -805,15 +817,20 @@ fn cmd_status(pilot: &Pilot) {
 }
 
 fn cmd_seed_jp(pilot: &Pilot) {
-    let url =
-        std::env::var("UNIDPP_JP_REGISTRY_URL").unwrap_or_else(|_| "http://127.0.0.1:8399".into());
-    let port: u16 = url
-        .rsplit(':')
-        .next()
-        .and_then(|p| p.parse().ok())
-        .unwrap_or(8399);
-    if !healthy(port) {
-        die("JP node not healthy (run: unidpp-stack up)");
+    // The peer's base: the one deployment mounts it at
+    // /registry-jp; the ten-service stack ran it on its own port.
+    let url = if let Ok(explicit) = std::env::var("UNIDPP_JP_REGISTRY_URL") {
+        explicit
+    } else if one_is_ours() {
+        format!("{}/registry-jp", one_origin())
+    } else {
+        "http://127.0.0.1:8399".into()
+    };
+    let healthy = http::get_url(&url, "/healthz", Duration::from_secs(5))
+        .map(|r| r.status == 200)
+        .unwrap_or(false);
+    if !healthy {
+        die("JP node not healthy (run: unidpp-stack one-up  — or up)");
     }
     let seeds = [
         (
@@ -830,7 +847,7 @@ fn cmd_seed_jp(pilot: &Pilot) {
     for (path, file, label) in seeds {
         let body = std::fs::read_to_string(pilot.dir.join(file))
             .unwrap_or_else(|e| die(&format!("{file}: {e}")));
-        let resp = http("POST", port, path, Some(&body), Duration::from_secs(20))
+        let resp = http::post_url(&url, path, &body, Duration::from_secs(20))
             .unwrap_or_else(|| die(&format!("{label}: no answer")));
         match resp.status {
             201 => println!("  [ok]   {label} registered"),
@@ -929,8 +946,391 @@ fn cmd_tenant(pilot: &Pilot, tenant: &str, action: &str) {
     );
 }
 
+// ---------------------------------------------------------------------------
+// The one deployment (REARCH R2): every module in `unidpp-server`, one
+// listener, one data root; the console keeps its own process until R3
+// folds it in; the tunnels forward each hostname's module prefix.
+// ---------------------------------------------------------------------------
+
+/// The one deployment's loopback port (the seed resolves its bases
+/// by probing it).
+pub(crate) const ONE_PORT: u16 = 8090;
+const ONE_REPO: &str = "unidpp-server";
+/// (module stem, the family repo owning its golden).
+const ONE_MODULES: &[(&str, &str)] = &[
+    ("registry", "unidpp-registry"),
+    ("trust", "unidpp-trust"),
+    ("log", "unidpp-log"),
+    ("issuer", "unidpp-issuer"),
+    ("views", "unidpp-projector"),
+    ("render", "unidpp-gateway"),
+    ("archive", "unidpp-archive"),
+    ("relay", "unidpp-hub"),
+];
+
+fn one_origin() -> String {
+    format!("http://127.0.0.1:{ONE_PORT}")
+}
+
+fn one_is_ours() -> bool {
+    match http("GET", ONE_PORT, "/version", None, Duration::from_secs(2)) {
+        Some(resp) if resp.status == 200 => serde_json::from_str::<serde_json::Value>(&resp.body)
+            .ok()
+            .and_then(|doc| {
+                doc.get("service")
+                    .and_then(|s| s.as_str())
+                    .map(|s| s == "unidpp")
+            })
+            .unwrap_or(false),
+        _ => false,
+    }
+}
+
+/// The one server's environment: the pilot's real data files (the
+/// registry journal stays at the repo root — it is the seed of
+/// record), the manifest's rendered policy for gateway and hub, and
+/// every inter-module URL re-pointed at the prefixed origin.
+fn one_environment(pilot: &Pilot) -> Vec<(String, String)> {
+    let dir = pilot.dir.clone();
+    let run = pilot.run_dir();
+    let origin = one_origin();
+    let mut env: Vec<(String, String)> = vec![
+        ("UNIDPP_SERVER_BIND".into(), format!("127.0.0.1:{ONE_PORT}")),
+        (
+            "UNIDPP_REGISTRY_STATE_FILE".into(),
+            dir.join("registry-journal.jsonl")
+                .to_string_lossy()
+                .into_owned(),
+        ),
+        (
+            "UNIDPP_SERVER_JP_STATE_FILE".into(),
+            dir.join("jp-registry-journal.jsonl")
+                .to_string_lossy()
+                .into_owned(),
+        ),
+        (
+            "UNIDPP_TRUST_STATE_FILE".into(),
+            run.join("trust-journal.jsonl")
+                .to_string_lossy()
+                .into_owned(),
+        ),
+        ("UNIDPP_LOG_ID".into(), "unidpp-pilot-log-1".into()),
+        (
+            "UNIDPP_LOG_STATE_FILE".into(),
+            run.join("log-journal.jsonl").to_string_lossy().into_owned(),
+        ),
+        (
+            "UNIDPP_LOG_EXTERNAL_TSA_URL".into(),
+            std::env::var("UNIDPP_LOG_EXTERNAL_TSA_URL")
+                .unwrap_or_else(|_| "http://timestamp.digicert.com".into()),
+        ),
+        (
+            "UNIDPP_ISSUER_STATE_FILE".into(),
+            run.join("issuer-journal.jsonl")
+                .to_string_lossy()
+                .into_owned(),
+        ),
+        (
+            "UNIDPP_ISSUER_REGISTRY_URL".into(),
+            format!("{origin}/registry"),
+        ),
+        ("UNIDPP_REGISTRY_URL".into(), format!("{origin}/registry")),
+        (
+            "UNIDPP_PROJECTOR_PASSPORTS_DIR".into(),
+            dir.join("passports").to_string_lossy().into_owned(),
+        ),
+        (
+            "UNIDPP_ARCHIVE_STATE_FILE".into(),
+            run.join("archive-journal.jsonl")
+                .to_string_lossy()
+                .into_owned(),
+        ),
+        (
+            "UNIDPP_ARCHIVE_SNAPSHOT_DIR".into(),
+            run.join("archive-snapshots").to_string_lossy().into_owned(),
+        ),
+        ("UNIDPP_LOG_URL".into(), format!("{origin}/log")),
+    ];
+    // The manifest carries the gateway's and the hub's policy; the
+    // legacy ports it still names lose to the prefixed origin.
+    for service in ["gateway", "hub"] {
+        for (k, v) in rendered_env(pilot, service) {
+            env.push((k, v));
+        }
+    }
+    for (key, value) in [
+        (
+            "UNIDPP_GATEWAY_ISSUER_URL".to_string(),
+            format!("{origin}/issuer"),
+        ),
+        ("UNIDPP_ISSUER_URL".to_string(), format!("{origin}/issuer")),
+    ] {
+        match env.iter_mut().find(|(name, _)| *name == key) {
+            Some(entry) => entry.1 = value,
+            None => env.push((key, value)),
+        }
+    }
+    env
+}
+
+fn cmd_one_up(pilot: &Pilot) {
+    std::fs::create_dir_all(pilot.run_dir()).unwrap();
+    std::fs::create_dir_all(pilot.dir.join("passports")).unwrap();
+    let url = one_origin();
+    if one_is_ours() {
+        println!("==> one-server already healthy on {url} (reusing)");
+    } else {
+        if port_taken(ONE_PORT) {
+            let holder = service_id(ONE_PORT).unwrap_or_else(|| "?".into());
+            die(&format!(
+                "port {ONE_PORT} is held by '{holder}' but the one deployment needs it — stop it first"
+            ));
+        }
+        ensure_bin(pilot, ONE_REPO);
+        println!("==> starting the one deployment on {url}");
+        let log = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(pilot.run_dir().join("one-server.log"))
+            .unwrap_or_else(|e| die(&format!("log file: {e}")));
+        let bin = pilot.bin(ONE_REPO);
+        let mut command = Command::new(bin);
+        command
+            .env_clear()
+            .envs(one_environment(pilot))
+            .stdout(
+                log.try_clone()
+                    .unwrap_or_else(|e| die(&format!("log handle: {e}"))),
+            )
+            .stderr(log)
+            .process_group(0);
+        let child = command
+            .spawn()
+            .unwrap_or_else(|e| die(&format!("unidpp-server failed to start: {e}")));
+        std::fs::write(
+            pilot.run_dir().join("one-server.pid"),
+            child.id().to_string(),
+        )
+        .unwrap_or_else(|e| die(&format!("pid file: {e}")));
+        for _ in 0..120 {
+            if one_is_ours() {
+                break;
+            }
+            if !alive(child.id()) {
+                die("the one deployment exited during startup (see run/one-server.log)");
+            }
+            std::thread::sleep(Duration::from_millis(500));
+        }
+        if !one_is_ours() {
+            die("the one deployment did not become healthy (see run/one-server.log)");
+        }
+    }
+    for (stem, _) in ONE_MODULES {
+        let ok = http(
+            "GET",
+            ONE_PORT,
+            &format!("/{stem}/healthz"),
+            None,
+            Duration::from_secs(3),
+        )
+        .map(|r| r.status == 200)
+        .unwrap_or(false);
+        if !ok {
+            die(&format!("module {stem} is not healthy behind its prefix"));
+        }
+    }
+    println!("==> all eight modules answer behind their prefixes");
+    if let Some(console) = services(pilot).into_iter().find(|s| s.name == "console") {
+        reconcile(pilot, &console, 120);
+    }
+    ensure_named_tunnel(pilot, "tunnel", "registry.unidpp.org", "127.0.0.1:8090");
+    ensure_named_tunnel(
+        pilot,
+        "jp-tunnel",
+        "registry-jp.unidpp.org",
+        "127.0.0.1:8090",
+    );
+    ensure_named_tunnel(pilot, "trust-tunnel", "trust.unidpp.org", "127.0.0.1:8090");
+    ensure_named_tunnel(pilot, "log-tunnel", "log.unidpp.org", "127.0.0.1:8090");
+    ensure_named_tunnel(
+        pilot,
+        "console-tunnel",
+        "console.unidpp.org",
+        "127.0.0.1:8389",
+    );
+    println!();
+    println!("==> one deployment up: {url}");
+    println!("               registry · trust · log · issuer · views · render · archive · relay · registry-jp");
+    println!("==> console: 127.0.0.1:8389 (own process until R3 folds it in)");
+    println!("==> next: unidpp-stack one-verify");
+}
+
+fn cmd_one_down(pilot: &Pilot) {
+    for name in [
+        "console-tunnel",
+        "log-tunnel",
+        "trust-tunnel",
+        "jp-tunnel",
+        "tunnel",
+        "console",
+        "one-server",
+    ] {
+        let pidfile = pilot.run_dir().join(format!("{name}.pid"));
+        if let Ok(pid) = std::fs::read_to_string(&pidfile) {
+            let pid = pid.trim().to_string();
+            let pid_num: u32 = pid.parse().unwrap_or(0);
+            if pid_num > 0 && alive(pid_num) {
+                let _ = Command::new("kill")
+                    .arg(&pid)
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .status();
+                println!("==> {name} stopped (pid {pid})");
+            } else {
+                println!("==> {name} pid {pid} not running (stale pid file)");
+            }
+            let _ = std::fs::remove_file(&pidfile);
+        }
+    }
+    println!("==> journals preserved");
+}
+
+fn cmd_one_status(pilot: &Pilot) {
+    let url = one_origin();
+    if one_is_ours() {
+        let pid = std::fs::read_to_string(pilot.run_dir().join("one-server.pid"))
+            .ok()
+            .and_then(|p| p.trim().parse::<u32>().ok());
+        println!(
+            "  one-server  {url}  healthy  v{}  (pid {})",
+            probe_version(ONE_PORT),
+            pid.map(|p| p.to_string()).unwrap_or_else(|| "?".into()),
+        );
+        for (stem, _) in ONE_MODULES {
+            let ok = http(
+                "GET",
+                ONE_PORT,
+                &format!("/{stem}/healthz"),
+                None,
+                Duration::from_secs(3),
+            )
+            .map(|r| r.status == 200)
+            .unwrap_or(false);
+            println!(
+                "    {:<12} /{stem:<12} {}",
+                stem,
+                if ok { "healthy" } else { "DOWN" }
+            );
+        }
+        println!("    {:<12} /registry-jp   mounted", "peer");
+    } else {
+        println!("  one-server  {url}  DOWN");
+    }
+    let console = services(pilot).into_iter().find(|s| s.name == "console");
+    if let Some(console) = console {
+        if is_ours(console.port, console.repo) {
+            println!("  console     http://127.0.0.1:{}  healthy", console.port);
+        } else {
+            println!("  console     http://127.0.0.1:{}  DOWN", console.port);
+        }
+    }
+    for (stem, hostname) in [
+        ("tunnel", "registry.unidpp.org"),
+        ("jp-tunnel", "registry-jp.unidpp.org"),
+        ("console-tunnel", "console.unidpp.org"),
+        ("trust-tunnel", "trust.unidpp.org"),
+        ("log-tunnel", "log.unidpp.org"),
+    ] {
+        let running = std::fs::read_to_string(pilot.run_dir().join(format!("{stem}.pid")))
+            .ok()
+            .and_then(|p| p.trim().parse::<u32>().ok())
+            .map(alive)
+            .unwrap_or(false);
+        println!(
+            "  {stem:<14} {hostname}  {}",
+            if running { "running" } else { "not running" }
+        );
+    }
+}
+
+/// `one-verify` — the deployment against the contracts: the union
+/// document equals the server repo's committed golden, and every
+/// module's served `/<m>/openapi.yaml` equals its repo golden.
+fn cmd_one_verify(pilot: &Pilot) {
+    let mut failed = false;
+    if !one_is_ours() {
+        println!("  one-server  http://127.0.0.1:{ONE_PORT}  DOWN");
+        std::process::exit(1);
+    }
+    let union_served = http(
+        "GET",
+        ONE_PORT,
+        "/openapi.yaml",
+        None,
+        Duration::from_secs(5),
+    )
+    .filter(|r| r.status == 200)
+    .map(|r| r.body);
+    let union_golden =
+        std::fs::read_to_string(pilot.family.join("unidpp-server/tests/union-golden.yaml")).ok();
+    match (union_served, union_golden) {
+        (Some(served), Some(golden)) if served.trim() == golden.trim() => {
+            println!("  {:<12} /openapi.yaml  CURRENT", "union");
+        }
+        (Some(_), None) => {
+            println!(
+                "  {:<12} NO GOLDEN in unidpp-server/tests/union-golden.yaml — cannot judge",
+                "union"
+            );
+            failed = true;
+        }
+        _ => {
+            println!(
+                "  {:<12} /openapi.yaml  STALE — rebuild unidpp-server + `unidpp-stack one-up`",
+                "union"
+            );
+            failed = true;
+        }
+    }
+    for (stem, repo) in ONE_MODULES {
+        let served = http(
+            "GET",
+            ONE_PORT,
+            &format!("/{stem}/openapi.yaml"),
+            None,
+            Duration::from_secs(5),
+        )
+        .filter(|r| r.status == 200)
+        .map(|r| r.body);
+        let golden = repo_golden(pilot, repo);
+        match (served, golden) {
+            (Some(served), Some(golden)) if served.trim() == golden.trim() => {
+                println!("  {:<12} /{stem:<12} CURRENT", stem);
+            }
+            (Some(_), None) => {
+                println!(
+                    "  {:<12} NO GOLDEN in {repo}/openapi.yaml — cannot judge",
+                    stem
+                );
+                failed = true;
+            }
+            _ => {
+                println!(
+                    "  {:<12} /{stem:<12} STALE — the served contract is not the committed golden",
+                    stem
+                );
+                failed = true;
+            }
+        }
+    }
+    if failed {
+        std::process::exit(1);
+    }
+    println!("one-verify: the union and every module serve their committed contracts");
+}
+
 fn usage() -> ! {
-    die("usage: unidpp-stack <up|down|status|verify|seed|seed-jp> | tenant <name> <up|down|status>")
+    die("usage: unidpp-stack <up|down|status|verify|seed|seed-jp|one-up|one-down|one-status|one-verify> | tenant <name> <up|down|status>")
 }
 
 fn main() {
@@ -967,6 +1367,10 @@ fn main() {
         Some("verify") => cmd_verify(&pilot),
         Some("seed-jp") => cmd_seed_jp(&pilot),
         Some("seed") => seed::run(&pilot),
+        Some("one-up") => cmd_one_up(&pilot),
+        Some("one-down") => cmd_one_down(&pilot),
+        Some("one-status") => cmd_one_status(&pilot),
+        Some("one-verify") => cmd_one_verify(&pilot),
         Some("tenant") => match (
             args.get(1).map(String::as_str),
             args.get(2).map(String::as_str),

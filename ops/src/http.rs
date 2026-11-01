@@ -37,10 +37,38 @@ pub fn request(
     Some(HttpText { status, body })
 }
 
-pub fn get(port: u16, path: &str, timeout: Duration) -> Option<HttpText> {
-    request("GET", port, path, None, timeout)
+/// `http://127.0.0.1:port[/prefix]` → (port, path prefix). The one
+/// deployment addresses modules by prefixed path on one origin; the
+/// ten-service stack passed bare ports, which parse the same way.
+fn split_url(url: &str) -> (u16, String) {
+    let rest = url.strip_prefix("http://").unwrap_or(url);
+    let (hostport, prefix) = match rest.split_once('/') {
+        Some((hp, p)) => (hp, format!("/{p}")),
+        None => (rest, String::new()),
+    };
+    let port = hostport
+        .rsplit(':')
+        .next()
+        .and_then(|p| p.parse().ok())
+        .unwrap_or(80);
+    (port, prefix)
 }
 
-pub fn post(port: u16, path: &str, body: &str, timeout: Duration) -> Option<HttpText> {
-    request("POST", port, path, Some(body), timeout)
+pub fn request_url(
+    method: &str,
+    url: &str,
+    path: &str,
+    body: Option<&str>,
+    timeout: Duration,
+) -> Option<HttpText> {
+    let (port, prefix) = split_url(url);
+    request(method, port, &format!("{prefix}{path}"), body, timeout)
+}
+
+pub fn get_url(url: &str, path: &str, timeout: Duration) -> Option<HttpText> {
+    request_url("GET", url, path, None, timeout)
+}
+
+pub fn post_url(url: &str, path: &str, body: &str, timeout: Duration) -> Option<HttpText> {
+    request_url("POST", url, path, Some(body), timeout)
 }
