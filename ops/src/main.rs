@@ -514,6 +514,30 @@ fn start_service(pilot: &Pilot, spec: &ServiceSpec, tries: u32) {
 /// pidfile is adopted; else cloudflared starts detached. The origin
 /// is `host:port[/prefix]` — in one-server mode each hostname
 /// forwards its module prefix to the shared origin.
+///
+/// The binary resolves absolutely before PATH, because the always-on
+/// watch runs under cron, whose PATH carries no Homebrew: the
+/// PATH-only lookup made the watch skip every tunnel restart while
+/// the connector was dead (the silent-skip failure the nightly
+/// caught on 2026-11-06).
+fn cloudflared_binary() -> String {
+    if let Ok(value) = std::env::var("UNIDPP_CLOUDFLARED") {
+        if !value.trim().is_empty() {
+            return value;
+        }
+    }
+    for candidate in [
+        "/opt/homebrew/bin/cloudflared",
+        "/usr/local/bin/cloudflared",
+        "/usr/bin/cloudflared",
+    ] {
+        if std::fs::metadata(candidate).is_ok() {
+            return candidate.to_string();
+        }
+    }
+    "cloudflared".to_string()
+}
+
 fn ensure_named_tunnel(pilot: &Pilot, stem: &str, hostname: &str, origin: &str) {
     let token_file = pilot.dir.join(format!("{stem}.token"));
     if std::fs::metadata(&token_file)
@@ -532,7 +556,8 @@ fn ensure_named_tunnel(pilot: &Pilot, stem: &str, hostname: &str, origin: &str) 
             }
         }
     }
-    if !Command::new("cloudflared")
+    let cloudflared = cloudflared_binary();
+    if !Command::new(&cloudflared)
         .arg("--version")
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -540,7 +565,9 @@ fn ensure_named_tunnel(pilot: &Pilot, stem: &str, hostname: &str, origin: &str) 
         .map(|s| s.success())
         .unwrap_or(false)
     {
-        println!("==> {stem}.token present but cloudflared is not installed — skipping");
+        println!(
+            "==> {stem}.token present but cloudflared is not installed at a known path — skipping"
+        );
         return;
     }
     println!("==> starting cloudflared named tunnel ({hostname} -> {origin})");
@@ -552,7 +579,7 @@ fn ensure_named_tunnel(pilot: &Pilot, stem: &str, hostname: &str, origin: &str) 
         .append(true)
         .open(pilot.run_dir().join(format!("{stem}.log")))
         .unwrap_or_else(|e| die(&format!("log file: {e}")));
-    let child = Command::new("cloudflared")
+    let child = Command::new(&cloudflared)
         .args([
             "tunnel",
             "run",
