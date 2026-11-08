@@ -618,12 +618,7 @@ fn cmd_up(pilot: &Pilot) {
         "registry-jp.unidpp.org",
         "127.0.0.1:8399",
     );
-    ensure_named_tunnel(
-        pilot,
-        "console-tunnel",
-        "console.unidpp.org",
-        "127.0.0.1:8389",
-    );
+    ensure_named_tunnel(pilot, "console-tunnel", "console.unidpp.org", "127.0.0.1:8090");
     ensure_named_tunnel(pilot, "trust-tunnel", "trust.unidpp.org", "127.0.0.1:8391");
     ensure_named_tunnel(pilot, "log-tunnel", "log.unidpp.org", "127.0.0.1:8392");
     println!();
@@ -1104,6 +1099,13 @@ fn one_environment(pilot: &Pilot) -> Vec<(String, String)> {
             format!("{origin}/issuer"),
         ),
         ("UNIDPP_ISSUER_URL".to_string(), format!("{origin}/issuer")),
+        // The console always loads the deployment's manifest — the
+        // very one this orchestrator renders from — whether or not
+        // the manifest declares a path for it.
+        (
+            "UNIDPP_CONSOLE_MANIFEST".to_string(),
+            pilot.manifest().to_string_lossy().into_owned(),
+        ),
     ] {
         match env.iter_mut().find(|(name, _)| *name == key) {
             Some(entry) => entry.1 = value,
@@ -1192,12 +1194,7 @@ fn cmd_one_up(pilot: &Pilot) {
     );
     ensure_named_tunnel(pilot, "trust-tunnel", "trust.unidpp.org", "127.0.0.1:8090");
     ensure_named_tunnel(pilot, "log-tunnel", "log.unidpp.org", "127.0.0.1:8090");
-    ensure_named_tunnel(
-        pilot,
-        "console-tunnel",
-        "console.unidpp.org",
-        "127.0.0.1:8389",
-    );
+    ensure_named_tunnel(pilot, "console-tunnel", "console.unidpp.org", "127.0.0.1:8090");
     println!();
     println!("==> one deployment up: {url}");
     println!("               registry · trust · log · issuer · views · render · archive · relay · registry-jp · console");
