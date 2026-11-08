@@ -1084,6 +1084,10 @@ fn one_environment(pilot: &Pilot) -> Vec<(String, String)> {
             "UNIDPP_ARCHIVE_SNAPSHOT_DIR".into(),
             run.join("archive-snapshots").to_string_lossy().into_owned(),
         ),
+        (
+            "UNIDPP_IDENTITY_STATE_FILE".into(),
+            run.join("identity-journal.jsonl").to_string_lossy().into_owned(),
+        ),
         ("UNIDPP_LOG_URL".into(), format!("{origin}/log")),
     ];
     // The manifest carries the gateway's and the hub's policy; the
