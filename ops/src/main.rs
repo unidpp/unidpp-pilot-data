@@ -969,9 +969,9 @@ fn cmd_tenant(pilot: &Pilot, tenant: &str, action: &str) {
 }
 
 // ---------------------------------------------------------------------------
-// The one deployment (REARCH R2): every module in `unidpp-server`, one
-// listener, one data root; the console keeps its own process until R3
-// folds it in; the tunnels forward each hostname's module prefix.
+// The one deployment (REARCH R2/R3): every module in `unidpp-server`,
+// one listener, one data root, the operator console included; the
+// tunnels point every hostname at the one origin.
 // ---------------------------------------------------------------------------
 
 /// The one deployment's loopback port (the seed resolves its bases
@@ -1181,10 +1181,7 @@ fn cmd_one_up(pilot: &Pilot) {
             die(&format!("module {stem} is not healthy behind its prefix"));
         }
     }
-    println!("==> all eight modules answer behind their prefixes");
-    if let Some(console) = services(pilot).into_iter().find(|s| s.name == "console") {
-        reconcile(pilot, &console, 120);
-    }
+    println!("==> all nine modules answer behind their prefixes");
     ensure_named_tunnel(pilot, "tunnel", "registry.unidpp.org", "127.0.0.1:8090");
     ensure_named_tunnel(
         pilot,
