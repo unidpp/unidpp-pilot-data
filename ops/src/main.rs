@@ -993,6 +993,7 @@ const ONE_MODULES: &[(&str, &str)] = &[
     ("render", "unidpp-gateway"),
     ("archive", "unidpp-archive"),
     ("relay", "unidpp-hub"),
+    ("console", "unidpp-console"),
 ];
 
 fn one_origin() -> String {
