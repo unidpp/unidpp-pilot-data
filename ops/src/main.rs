@@ -618,7 +618,12 @@ fn cmd_up(pilot: &Pilot) {
         "registry-jp.unidpp.org",
         "127.0.0.1:8399",
     );
-    ensure_named_tunnel(pilot, "console-tunnel", "console.unidpp.org", "127.0.0.1:8090");
+    ensure_named_tunnel(
+        pilot,
+        "console-tunnel",
+        "console.unidpp.org",
+        "127.0.0.1:8090",
+    );
     ensure_named_tunnel(pilot, "trust-tunnel", "trust.unidpp.org", "127.0.0.1:8391");
     ensure_named_tunnel(pilot, "log-tunnel", "log.unidpp.org", "127.0.0.1:8392");
     println!();
@@ -1086,7 +1091,9 @@ fn one_environment(pilot: &Pilot) -> Vec<(String, String)> {
         ),
         (
             "UNIDPP_IDENTITY_STATE_FILE".into(),
-            run.join("identity-journal.jsonl").to_string_lossy().into_owned(),
+            run.join("identity-journal.jsonl")
+                .to_string_lossy()
+                .into_owned(),
         ),
         ("UNIDPP_LOG_URL".into(), format!("{origin}/log")),
     ];
@@ -1195,7 +1202,12 @@ fn cmd_one_up(pilot: &Pilot) {
     );
     ensure_named_tunnel(pilot, "trust-tunnel", "trust.unidpp.org", "127.0.0.1:8090");
     ensure_named_tunnel(pilot, "log-tunnel", "log.unidpp.org", "127.0.0.1:8090");
-    ensure_named_tunnel(pilot, "console-tunnel", "console.unidpp.org", "127.0.0.1:8090");
+    ensure_named_tunnel(
+        pilot,
+        "console-tunnel",
+        "console.unidpp.org",
+        "127.0.0.1:8090",
+    );
     println!();
     println!("==> one deployment up: {url}");
     println!("               registry · trust · log · issuer · views · render · archive · relay · registry-jp · console");
