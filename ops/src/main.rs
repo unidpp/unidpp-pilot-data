@@ -1095,6 +1095,10 @@ fn one_environment(pilot: &Pilot) -> Vec<(String, String)> {
                 .to_string_lossy()
                 .into_owned(),
         ),
+        (
+            "UNIDPP_SERVER_TENANTS_DIR".into(),
+            pilot.dir.join("tenants").to_string_lossy().into_owned(),
+        ),
         ("UNIDPP_LOG_URL".into(), format!("{origin}/log")),
     ];
     // The manifest carries the gateway's and the hub's policy; the
