@@ -999,6 +999,18 @@ fn one_origin() -> String {
     format!("http://127.0.0.1:{ONE_PORT}")
 }
 
+/// Whether the one deployment carries the operator console: the
+/// console rides when its manifest is named and readable (REARCH R3).
+fn one_serves_console(_pilot: &Pilot) -> bool {
+    std::env::var("UNIDPP_CONSOLE_MANIFEST")
+        .map(|v| {
+            std::fs::metadata(v.trim())
+                .map(|m| m.is_file())
+                .unwrap_or(false)
+        })
+        .unwrap_or(false)
+}
+
 fn one_is_ours() -> bool {
     match http("GET", ONE_PORT, "/version", None, Duration::from_secs(2)) {
         Some(resp) if resp.status == 200 => serde_json::from_str::<serde_json::Value>(&resp.body)
@@ -1080,7 +1092,7 @@ fn one_environment(pilot: &Pilot) -> Vec<(String, String)> {
     ];
     // The manifest carries the gateway's and the hub's policy; the
     // legacy ports it still names lose to the prefixed origin.
-    for service in ["gateway", "hub"] {
+    for service in ["gateway", "hub", "console"] {
         for (k, v) in rendered_env(pilot, service) {
             env.push((k, v));
         }
@@ -1187,8 +1199,7 @@ fn cmd_one_up(pilot: &Pilot) {
     );
     println!();
     println!("==> one deployment up: {url}");
-    println!("               registry · trust · log · issuer · views · render · archive · relay · registry-jp");
-    println!("==> console: 127.0.0.1:8389 (own process until R3 folds it in)");
+    println!("               registry · trust · log · issuer · views · render · archive · relay · registry-jp · console");
     println!("==> next: unidpp-stack one-verify");
 }
 
@@ -1199,7 +1210,6 @@ fn cmd_one_down(pilot: &Pilot) {
         "trust-tunnel",
         "jp-tunnel",
         "tunnel",
-        "console",
         "one-server",
     ] {
         let pidfile = pilot.run_dir().join(format!("{name}.pid"));
@@ -1253,13 +1263,20 @@ fn cmd_one_status(pilot: &Pilot) {
     } else {
         println!("  one-server  {url}  DOWN");
     }
-    let console = services(pilot).into_iter().find(|s| s.name == "console");
-    if let Some(console) = console {
-        if is_ours(console.port, console.repo) {
-            println!("  console     http://127.0.0.1:{}  healthy", console.port);
-        } else {
-            println!("  console     http://127.0.0.1:{}  DOWN", console.port);
-        }
+    if one_serves_console(pilot) {
+        let console_ok = http(
+            "GET",
+            ONE_PORT,
+            "/console/healthz",
+            None,
+            Duration::from_secs(3),
+        )
+        .map(|r| r.status == 200)
+        .unwrap_or(false);
+        println!(
+            "  console     /console on the one origin  {}",
+            if console_ok { "healthy" } else { "DOWN" }
+        );
     }
     for (stem, hostname) in [
         ("tunnel", "registry.unidpp.org"),
