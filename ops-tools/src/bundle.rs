@@ -1,10 +1,12 @@
 //! The on-prem whitelabel artifact: everything a sovereign customer
 //! needs on their own host, verified like a backup. The manifest is
-//! the model — only the services it declares ship, and the
-//! data-only variant carries tenant state alone for a deployment
-//! that already has its engine. The bundle's own runner (`unidpp-run`,
-//! this crate's second binary) and runbook travel inside it, so the
-//! receiving host needs nothing but this archive.
+//! the model — the one `unidpp-server` binary is the engine (REARCH
+//! R1: every declared module serves behind its prefix in one
+//! process), and the data-only variant carries tenant state alone
+//! for a deployment that already has its engine. The bundle's own
+//! runner (`unidpp-run`, this crate's second binary) and runbook
+//! travel inside it, so the receiving host needs nothing but this
+//! archive.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -24,7 +26,7 @@ the data; the binaries are the engine. Produced @@PRODUCED@@Z.
 
     ./bin/unidpp-config validate unidpp-operator.yaml   # always validate first
     cp .env.template .env                               # fill every ${VAR}
-    ./unidpp-run start                                  # render-env + ./bin binaries
+    ./unidpp-run start                                  # one unidpp-server, every module behind its prefix
     ./unidpp-run status
 
 Ports, state files, suites, sovereignty rules: read them from the
@@ -156,35 +158,30 @@ pub fn cmd_bundle(root: &Path, backups: &Path, args: &[String], quiet: bool) {
         copy(&root.join("tenants").join(&tenant).join(&rel), &staged);
     }
 
-    // Binaries for exactly the declared services (the manifest is
-    // the model), the config CLI, the tenant runner, and the ops
-    // contract. The data-only artifact carries none of these.
+    // The one engine (the manifest's declared services enumerate for
+    // validation and the runbook, but the binary count is one), the
+    // config CLI, the tenant runner, and the ops contract. The
+    // data-only artifact carries none of these.
     if !data_only {
         let services_out = Command::new(&config_cli)
             .arg("services")
             .arg(&manifest)
             .output()
             .unwrap_or_else(|e| util::die(&format!("cannot enumerate the declared services: {e}")));
-        for svc in String::from_utf8_lossy(&services_out.stdout).lines() {
-            let svc = svc.trim();
-            if svc.is_empty() {
-                continue;
-            }
-            let bin = family
-                .join(format!("unidpp-{svc}"))
-                .join("target/release")
-                .join(format!("unidpp-{svc}"));
-            if !util::is_executable(&bin) {
-                util::die(&format!(
-                    "binary for declared service '{svc}' missing: {}",
-                    bin.display()
-                ));
-            }
-            copy(
-                &bin,
-                &stage_tenant.join("bin").join(format!("unidpp-{svc}")),
-            );
+        if !services_out.status.success() {
+            util::die("unidpp-config services rejected the manifest");
         }
+        let server = family
+            .join("unidpp-server")
+            .join("target/release")
+            .join("unidpp-server");
+        if !util::is_executable(&server) {
+            util::die(&format!(
+                "the deployment engine is missing (build unidpp-server): {}",
+                server.display()
+            ));
+        }
+        copy(&server, &stage_tenant.join("bin").join("unidpp-server"));
         copy(&config_cli, &stage_tenant.join("bin").join("unidpp-config"));
         // The durability program and the bundle runner, resolved from
         // the running binary's directory so debug and release both

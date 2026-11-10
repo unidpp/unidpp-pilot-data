@@ -94,12 +94,16 @@ jobs:
         with:
           repository: unidpp/unidpp-hub
           path: unidpp-hub
+      - uses: actions/checkout@v4
+        with:
+          repository: unidpp/unidpp-server
+          path: unidpp-server
       - name: Build the stack, the orchestrator and the durability program
         run: |
           set -eu
           for repo in unidpp-cli unidpp-config unidpp-registry unidpp-trust \
                       unidpp-log unidpp-issuer unidpp-projector unidpp-gateway \
-                      unidpp-archive unidpp-hub unidpp-console; do
+                      unidpp-archive unidpp-hub unidpp-console unidpp-server; do
             cargo build --release --manifest-path "../$repo/Cargo.toml"
           done
           cargo build --release --manifest-path ops/Cargo.toml
@@ -158,12 +162,13 @@ jobs:
           $ops verify "$fb"
           tmp="$(mktemp -d)"
           tar -xzf "$fb" -C "$tmp"
-          "$tmp/scratch-fw/unidpp-run" start
+          (cd "$tmp/scratch-fw" && ./unidpp-run start)
           sleep 3
-          curl -sf -m 5 http://127.0.0.1:9690/healthz
-          curl -sf -m 5 http://127.0.0.1:9693/healthz
-          "$tmp/scratch-fw/unidpp-run" status | grep -c running
-          "$tmp/scratch-fw/unidpp-run" stop
+          curl -sf -m 5 http://127.0.0.1:9689/healthz
+          curl -sf -m 5 http://127.0.0.1:9689/registry/healthz
+          curl -sf -m 5 http://127.0.0.1:9689/console/healthz
+          (cd "$tmp/scratch-fw" && ./unidpp-run status | grep -c "server: running")
+          (cd "$tmp/scratch-fw" && ./unidpp-run stop)
           rm -rf "$tmp" tenants/scratch-fw
       - name: The bundle
         run: |

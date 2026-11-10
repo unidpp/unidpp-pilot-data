@@ -3,6 +3,7 @@ deployment:
   name: acme-cn
   profile: sovereign
   base_url: https://dpp.acme.cn.example.org
+  bind: 127.0.0.1:9589
 branding:
   locale: zh-CN
   organization: ACME 华动

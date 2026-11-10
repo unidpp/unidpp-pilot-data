@@ -3,6 +3,7 @@ deployment:
   name: acme-eu
   profile: whitelabel
   base_url: https://dpp.acme-mobility.example.org
+  bind: 127.0.0.1:9389
 branding:
   organization: ACME Mobility
   product_name: ACME Digital Product Passport
