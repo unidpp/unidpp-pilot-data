@@ -1,0 +1,27 @@
+api_version: unidpp.org/v1
+deployment:
+  name: sandbox
+  profile: whitelabel
+  base_url: https://sandbox.unidpp.org
+branding:
+  organization: UniDPP
+  product_name: UniDPP Sandbox
+  theme:
+    primary: "#2563eb"
+    accent: "#10b981"
+  footer:
+    legal_url: https://www.unidpp.org/legal
+    contact_url: mailto:contact@unidpp.org
+services:
+  registry:
+    bind: 127.0.0.1:9490
+    state_file: tenants/sandbox/registry-journal.jsonl
+  issuer:
+    bind: 127.0.0.1:9493
+    state_file: tenants/sandbox/issuer-journal.jsonl
+    pack_suites: [ecdsa-p256]
+  console:
+    bind: 127.0.0.1:9489
+sovereignty:
+  data_residency: none
+  external_calls: none
