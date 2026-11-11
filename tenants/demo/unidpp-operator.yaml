@@ -2,7 +2,7 @@ api_version: unidpp.org/v1
 deployment:
   name: sandbox
   profile: whitelabel
-  base_url: https://sandbox.unidpp.org
+  base_url: https://demo.unidpp.org
 branding:
   organization: UniDPP
   product_name: UniDPP Sandbox
@@ -15,10 +15,10 @@ branding:
 services:
   registry:
     bind: 127.0.0.1:9490
-    state_file: tenants/sandbox/registry-journal.jsonl
+    state_file: tenants/demo/registry-journal.jsonl
   issuer:
     bind: 127.0.0.1:9493
-    state_file: tenants/sandbox/issuer-journal.jsonl
+    state_file: tenants/demo/issuer-journal.jsonl
     pack_suites: [ecdsa-p256]
   console:
     bind: 127.0.0.1:9489

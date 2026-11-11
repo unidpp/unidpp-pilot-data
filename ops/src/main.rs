@@ -1214,10 +1214,11 @@ fn cmd_one_up(pilot: &Pilot) {
     );
     ensure_named_tunnel(
         pilot,
-        "sandbox-tunnel",
-        "sandbox.unidpp.org",
+        "demo-tunnel",
+        "demo.unidpp.org",
         "127.0.0.1:8090",
     );
+    ensure_named_tunnel(pilot, "app-tunnel", "app.unidpp.org", "127.0.0.1:8090");
     println!();
     println!("==> one deployment up: {url}");
     println!("               registry · trust · log · issuer · views · render · archive · relay · registry-jp · console");
@@ -1231,6 +1232,8 @@ fn cmd_one_down(pilot: &Pilot) {
         "trust-tunnel",
         "jp-tunnel",
         "tunnel",
+        "demo-tunnel",
+        "app-tunnel",
         "one-server",
     ] {
         let pidfile = pilot.run_dir().join(format!("{name}.pid"));
