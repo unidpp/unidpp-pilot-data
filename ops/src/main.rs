@@ -1212,6 +1212,12 @@ fn cmd_one_up(pilot: &Pilot) {
         "console.unidpp.org",
         "127.0.0.1:8090",
     );
+    ensure_named_tunnel(
+        pilot,
+        "sandbox-tunnel",
+        "sandbox.unidpp.org",
+        "127.0.0.1:8090",
+    );
     println!();
     println!("==> one deployment up: {url}");
     println!("               registry · trust · log · issuer · views · render · archive · relay · registry-jp · console");

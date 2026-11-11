@@ -12,7 +12,10 @@ or availability. A passport minted in the sandbox is a demonstration
 passport, and no party shall treat a sandbox verdict as a conformance
 decision about a real product.
 
-The public flip is an owner decision and remains deliberately untaken:
-the tenant serves on loopback today, and `sandbox.unidpp.org` becomes
-reachable publicly only when its DNS record and tunnel ingress are
-provisioned. Until that word, the hostname is staged and inert.
+The public flip was taken by the owner's decision on 2026-11-11: the
+DNS record `sandbox.unidpp.org` (a proxied CNAME to the
+`unidpp-sandbox` named tunnel) and the tunnel ingress (one hostname
+to the deployment's origin) are live, and the tenant serves the
+public alongside its five sibling aliases. Its tunnel connector rides
+the same `one-up` loop as the rest of the estate
+(`sandbox-tunnel.token` at the pilot root).
